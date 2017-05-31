@@ -51,6 +51,7 @@ mats$trial = ifelse(
 )
 
 # below line takes roughly 1 minute
+# df_orig
 df = merge(df, mats)   # should merge based on trial and id
 
 # the merge causes the order of frames to get messed up so we sort
@@ -172,7 +173,6 @@ df_long$target_fixed = factor(df_long$target_fixed)
 # compare_mappings %>%
 #   dplyr::filter(coordinate == "z") -> compare_mappings
 
-
 df_long %>%
   dplyr::filter(id != "002", id != "018") %>%  # get rid of 2 and 18
   dplyr::mutate(
@@ -247,15 +247,7 @@ df_long %>%
 
 
 # Exclusion ----
-# identify trials that exceed thresholds 
-# df_long %>%
-#   dplyr::filter(
-#     (coordinate == "y" & position < -20) | (coordinate == "x" & position > 250) | (coordinate == "x" & position < 75)
-#     | (target_final == "0" & ((coordinate == "z" & position > -2350) | (coordinate == "z" & position < -2600)))
-#     | (target_final == "1" & ((coordinate == "z" & position > -2250) | (coordinate == "z" & position < -2500)))
-#   ) %>%
-#   group_by(id, trial) %>%
-#   dplyr::summarize(dummy = mean(position)) -> df_exclude
+# identify trials that exceed thresholds
 df_long %>%
   dplyr::select(id, coordinate, trial, frame, position, target_final) %>%
   spread(coordinate, position) %>%
@@ -333,21 +325,7 @@ df_long_clean %>%
 
 # SAVE WORKSPACE
 
-
 # Derivatives ----
-# ptm = proc.time()
-# df_long_clean = ddply(
-#   .data = df_long_clean
-#   , .variables = c("id", "coordinate", "trial")
-#   , .fun = function(df_piece) {
-#     df_piece$velocity = c(0, diff(df_piece$position))
-#     df_piece$acceleration = c(0, diff(df_piece$velocity))
-#     return(df_piece)
-#   }
-#   , .progress = "text"
-# )
-# ptm - proc.time()
-
 # unfortunately this grouping does not work, so the first frame is not always 0
 # it should not matter later that the first frame is not always zero
 df_long_clean$velocity = c(0, diff(df_long_clean$position))
@@ -365,6 +343,7 @@ df_long_clean %>%
     ) %>%
   gather(coordinate, velocity, x:z, factor_key = T) %>%
   dplyr::arrange(id, coordinate, trial) -> df_long_velo  # the arrange function is necessary for lining up both data frames
+
 
 # make sure they are lined up
 mean(df_long_velo$velocity == df_long_clean$velocity)
@@ -392,40 +371,17 @@ df_long_clean$trial_start_frame = df_long_clean$trial_start_bool * df_long_clean
 # select some columns to make things faster
 df_long_clean %>%
   dplyr::select(
-    -c(soa, hi_95, lo_95, block, target, target_fixed, velocity, abs_velo, non_stationary, potential_start, trial_start_bool)
+    -c(soa, hi_95, lo_95, block, target, target_fixed, velocity, non_stationary, potential_start, trial_start_bool)
     ) -> df_long_clean
 
+# give some space 
+buffer = 20
 df_long_clean %>%
   group_by(id, coordinate, trial) %>%
   dplyr::mutate(
-    trial_start = sort(unique(trial_start_frame))[2] - (ma_length - 1)/2  # we pick the second lowest because there are many zeroes
-    , trial_end = max(trial_start_frame, na.rm = T) + 5
+    trial_start = sort(unique(trial_start_frame))[2] - (ma_length - 1)/2 - buffer   # we pick the second lowest because there are many zeroes
+    # , trial_end = max(trial_start_frame, na.rm = T) + 5  # this does not work because it captures reversal
   ) -> df_long_clean
-
-# ma_length = 5
-# # this could take time
-# ptm = proc.time()
-# df_long_clean = ddply(
-#   .data = df_long_clean
-#   , .variables = c("id", "coordinate", "trial")
-#   , .fun = function(df_piece) {
-#     
-#     df_piece$potential_start = as.numeric(ma(df_piece$non_stationary, ma_length))
-#     df_piece$trial_start_idx = which(df_piece$potential_start == 1)[1]
-#     
-#     if (is.na(unique(df_piece$trial_start_idx))) {
-#       df_piece = NULL
-#     } else {
-#       df_piece$trial_start = df_piece$frame[df_piece$trial_start_idx] - (ma_length - 1)/2
-#       df_piece$trial_end_idx = tail(which(df_piece$potential_start == 1), n=1)
-#       df_piece$trial_end = df_piece$frame[df_piece$trial_end_idx] + 5
-#     }
-#     
-#     return(df_piece)
-#   }
-#   , .progress = "text"
-# )
-# proc.time() - ptm  # 14 seconds for 1 participant --> ~5 mins for 20 participants
 
 # check how many trials are left now
 df_long_clean %>%
@@ -435,7 +391,10 @@ df_long_clean %>%
   )
 
 df_long_clean %>%
-  dplyr::filter(frame >= trial_start, frame <= trial_end) -> df_long_trim
+  dplyr::filter(
+    frame >= trial_start
+    # , frame <= trial_end
+    ) -> df_long_trim
 
 df_long_trim %>%
   group_by(id, coordinate, trial) %>%
@@ -443,47 +402,141 @@ df_long_trim %>%
     time = frame - min(frame)  # grouping works for min()
   ) -> df_long_trim
 
-# do they line up?
+# trial end threshold
+trial_end = 100
+# look at velocities first
 df_long_trim %>%
-  dplyr::filter(coordinate == "x", id == "013") %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) < 10) %>%  # the coordinate is arbitrary. 
+  # The absolute velocity is the same across all three coordinates
+  ggplot()+
+  geom_line(aes(x=time, y=abs_velo, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("absolute velocity")+
+  ylim(c(0, 10))+
+  geom_vline(xintercept = trial_end)+
+  facet_grid(id~target_final)+
+  theme(legend.position = "none")
+df_long_trim %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) >= 10) %>%  # the coordinate is arbitrary. 
+  # The absolute velocity is the same across all three coordinates
+  ggplot()+
+  geom_line(aes(x=time, y=abs_velo, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("absolute velocity")+
+  ylim(c(0, 10))+
+  geom_vline(xintercept = trial_end)+
+  facet_grid(id~target_final)+
+  theme(legend.position = "none")
+
+# averages
+df_long_trim %>%
+  dplyr::filter(coordinate == "z") %>%
+  group_by(id, target_final, time) %>%
+  dplyr::summarise(
+    abs_velo_avg = mean(abs_velo)
+  ) -> df_velo_avg
+
+df_velo_avg %>%
+  ggplot()+
+  geom_line(aes(x=time, y=abs_velo_avg, color = id), alpha = 0.5)+
+  xlab("time")+
+  ylab("absolute velocity")+
+  ylim(c(0,10))+
+  facet_grid(.~target_final)
+
+# again averages
+df_velo_avg %>%
+  group_by(target_final, time) %>%
+  dplyr::summarise(
+    abs_velo_grand_avg = mean(abs_velo_avg)
+  ) -> df_velo_grand_avg
+
+df_velo_grand_avg %>%
+  ggplot()+
+  geom_line(aes(x=time, y=abs_velo_grand_avg))+
+  xlab("time")+
+  ylab("absolute velocity")+
+  facet_grid(.~target_final)
+
+
+# do the trajectories line up?
+df_long_trim %>%
+  dplyr::filter(coordinate == "x", as.numeric(id) < 10) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (x)")+
-  facet_grid(.~target_final)+
+  geom_vline(xintercept = trial_end)+
+  facet_grid(id~target_final)+
+  theme(legend.position = "none")
+df_long_trim %>%
+  dplyr::filter(coordinate == "x", as.numeric(id) >= 10) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (x)")+
+  geom_vline(xintercept = trial_end)+
+  facet_grid(id~target_final)+
   theme(legend.position = "none")
 
 df_long_trim %>%
-  dplyr::filter(coordinate == "y", id == "013") %>%
+  dplyr::filter(coordinate == "y", as.numeric(id) < 10) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (y)")+
-  facet_grid(.~target_final)+
+  geom_vline(xintercept = trial_end)+
+  facet_grid(id~target_final)+
+  theme(legend.position = "none")
+df_long_trim %>%
+  dplyr::filter(coordinate == "y", as.numeric(id) >= 10) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (y)")+
+  geom_vline(xintercept = trial_end)+
+  facet_grid(id~target_final)+
   theme(legend.position = "none")
 
 df_long_trim %>%
-  dplyr::filter(coordinate == "z", id == "013") %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) < 10) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (z)")+
-  facet_grid(.~target_final)+
+  geom_vline(xintercept = trial_end)+
+  facet_grid(id~target_final)+
+  theme(legend.position = "none")
+df_long_trim %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) >= 10) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (z)")+
+  geom_vline(xintercept = trial_end)+
+  facet_grid(id~target_final)+
   theme(legend.position = "none")
 
-# how do the id averages look?.. We average over trials
+
+# Trial End ----
+df_long_trim %>%
+  dplyr::filter(
+    time <= trial_end
+  ) -> df_long_trim
+
+
+# Averages ----
 df_long_trim %>%
   group_by(id, coordinate, target_final, time) %>%
   dplyr::summarise(
     position_avg = mean(position)
-  ) -> df_long_trim_avg 
+  ) -> df_long_trim_avg
 
 df_long_trim_avg %>%
   dplyr::filter(coordinate == "x") %>%
   ggplot()+
   geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
   xlab("time")+
-  xlim(c(0,300))+
   ylab("position (x)")+
   facet_grid(.~target_final)
 
@@ -492,7 +545,6 @@ df_long_trim_avg %>%
   ggplot()+
   geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
   xlab("time")+
-  xlim(c(0,300))+
   ylab("position (y)")+
   facet_grid(.~target_final)
 
@@ -501,23 +553,21 @@ df_long_trim_avg %>%
   ggplot()+
   geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
   xlab("time")+
-  xlim(c(0,300))+
   ylab("position (z)")+
   facet_grid(.~target_final)
 
-# take averages over participants 
+# take averages over participants
 df_long_trim_avg %>%
   group_by(coordinate, target_final, time) %>%
   dplyr::summarise(
     position_grand_avg = mean(position_avg)
-  ) -> df_long_trim_grand_avg 
+  ) -> df_long_trim_grand_avg
 
 df_long_trim_grand_avg %>%
   dplyr::filter(coordinate == "x") %>%
   ggplot()+
   geom_line(aes(x=time, y=position_grand_avg))+
   xlab("time")+
-  xlim(c(0,300))+
   ylab("position (x)")+
   facet_grid(.~target_final)
 
@@ -526,7 +576,6 @@ df_long_trim_grand_avg %>%
   ggplot()+
   geom_line(aes(x=time, y=position_grand_avg))+
   xlab("time")+
-  xlim(c(0,300))+
   ylab("position (y)")+
   facet_grid(.~target_final)
 
@@ -535,109 +584,114 @@ df_long_trim_grand_avg %>%
   ggplot()+
   geom_line(aes(x=time, y=position_grand_avg))+
   xlab("time")+
-  xlim(c(0,300))+
   ylab("position (z)")+
   facet_grid(.~target_final)
 
 
-# Normalize ----
-round0 = function(x,z){
-  round(x/z,0)*z
-}
+# # Save Data ----
+# save(df_long_trim, file = "data_trim.RData")
+  
 
-df_long_trim %>%
-  group_by(id, trial, coordinate) %>%
-  dplyr::mutate(
-    norm_time = round0((time-min(time))/(max(time)-min(time)), 0.01)
-    ) -> df_long_norm
-
-# do they line up?
-df_long_norm %>%
-  dplyr::filter(coordinate == "x", id == "013") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position, color = trial), alpha = 0.2)+
-  xlab("normalized time")+
-  ylab("position (x)")+
-  facet_grid(.~target_final)+
-  theme(legend.position = "none")
-
-df_long_norm %>%
-  dplyr::filter(coordinate == "y", id == "013") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position, color = trial), alpha = 0.2)+
-  xlab("normalized time")+
-  ylab("position (y)")+
-  facet_grid(.~target_final)+
-  theme(legend.position = "none")
-
-df_long_norm %>%
-  dplyr::filter(coordinate == "z", id == "013") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position, color = trial), alpha = 0.2)+
-  xlab("normalized time")+
-  ylab("position (z)")+
-  facet_grid(.~target_final)+
-  theme(legend.position = "none")
-
-# how do the id averages look?.. We average over trials
-df_long_norm %>%
-  group_by(id, coordinate, target_final, norm_time) %>%
-  dplyr::summarise(
-    position_avg = mean(position)
-  ) -> df_long_norm_avg 
-
-df_long_norm_avg %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_avg, color = id), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("position (x)")+
-  facet_grid(.~target_final)
-
-df_long_norm_avg %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_avg, color = id), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("position (y)")+
-  facet_grid(.~target_final)
-
-df_long_norm_avg %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_avg, color = id), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("position (z)")+
-  facet_grid(.~target_final)
-
-# now we average over participants
-df_long_norm_avg %>%
-  group_by(coordinate, target_final, norm_time) %>%
-  dplyr::summarise(
-    position_grand_avg = mean(position_avg)
-  ) -> df_long_norm_grand_avg 
-
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg))+
-  xlab("time")+
-  ylab("position (x)")+
-  facet_grid(.~target_final)
-
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg))+
-  xlab("time")+
-  ylab("position (y)")+
-  facet_grid(.~target_final)
-
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg))+
-  xlab("time")+
-  ylab("position (z)")+
-  facet_grid(.~target_final)
-
+# # Normalize ----
+# round0 = function(x,z){
+#   round(x/z,0)*z
+# }
+# 
+# df_long_trim %>%
+#   group_by(id, trial, coordinate) %>%
+#   dplyr::mutate(
+#     norm_time = round0((time-min(time))/(max(time)-min(time)), 0.01)
+#     ) -> df_long_norm
+# 
+# df_long_norm %>%
+#   dplyr::filter(coordinate == "x", id == "013") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position, color = trial), alpha = 0.2)+
+#   xlab("normalized time")+
+#   ylab("position (x)")+
+#   facet_grid(.~target_final)+
+#   theme(legend.position = "none")
+# 
+# df_long_norm %>%
+#   dplyr::filter(coordinate == "y", id == "013") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position, color = trial), alpha = 0.2)+
+#   xlab("normalized time")+
+#   ylab("position (y)")+
+#   facet_grid(.~target_final)+
+#   theme(legend.position = "none")
+# 
+# df_long_norm %>%
+#   dplyr::filter(coordinate == "z", id == "013") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position, color = trial), alpha = 0.2)+
+#   xlab("normalized time")+
+#   ylab("position (z)")+
+#   facet_grid(.~target_final)+
+#   theme(legend.position = "none")
+# 
+# # how do the id averages look?.. We average over trials
+# df_long_norm %>%
+#   group_by(id, coordinate, target_final, norm_time) %>%
+#   dplyr::summarise(
+#     position_avg = mean(position)
+#   ) -> df_long_norm_avg 
+# 
+# df_long_norm_avg %>%
+#   dplyr::filter(coordinate == "x") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position_avg, color = id), alpha = 0.5)+
+#   xlab("normalized time")+
+#   ylab("position (x)")+
+#   facet_grid(.~target_final)
+# 
+# df_long_norm_avg %>%
+#   dplyr::filter(coordinate == "y") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position_avg, color = id), alpha = 0.5)+
+#   xlab("normalized time")+
+#   ylab("position (y)")+
+#   facet_grid(.~target_final)
+# 
+# df_long_norm_avg %>%
+#   dplyr::filter(coordinate == "z") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position_avg, color = id), alpha = 0.5)+
+#   xlab("normalized time")+
+#   ylab("position (z)")+
+#   facet_grid(.~target_final)
+# 
+# # now we average over participants
+# df_long_norm_avg %>%
+#   group_by(coordinate, target_final, norm_time) %>%
+#   dplyr::summarise(
+#     position_grand_avg = mean(position_avg)
+#   ) -> df_long_norm_grand_avg 
+# 
+# df_long_norm_grand_avg %>%
+#   dplyr::filter(coordinate == "x") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position_grand_avg))+
+#   xlab("time")+
+#   ylab("position (x)")+
+#   facet_grid(.~target_final)
+# 
+# df_long_norm_grand_avg %>%
+#   dplyr::filter(coordinate == "y") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position_grand_avg))+
+#   xlab("time")+
+#   ylab("position (y)")+
+#   facet_grid(.~target_final)
+# 
+# df_long_norm_grand_avg %>%
+#   dplyr::filter(coordinate == "z") %>%
+#   ggplot()+
+#   geom_line(aes(x=norm_time, y=position_grand_avg))+
+#   xlab("time")+
+#   ylab("position (z)")+
+#   facet_grid(.~target_final)
+# 
+# 
+# # # Save normalized data ----
+# # save(df_long_norm, file = "data_norm.Rdata")
