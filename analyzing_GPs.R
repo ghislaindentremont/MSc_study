@@ -112,11 +112,11 @@ df_condition_meansz %>%
 # Establish Prior ----
 # volatility
 # subj_volatility_sd
-curve(dweibull(x, 2, 10), 0, 20, ylab = "density", xlab = "subject volatility sd")
+curve(dweibull(x, 2, 3), 0, 10, ylab = "density", xlab = "subject volatility sd")
 # subj_volatility
-curve(dcauchy(x, 0, mean(rweibull(1000, 2, 10))), 0, 20, ylab = "density", xlab = "subject volatility")
+curve(dcauchy(x, 0, mean(rweibull(1000, 2, 3))), 0, 20, ylab = "density", xlab = "subject volatility")
 # volatility
-curve(dcauchy(x, 0, 10), 0, 20, ylab = "density", xlab = "population volatility")
+curve(dcauchy(x, 0, 3), 0, 20, ylab = "density", xlab = "population volatility")
 
 # amplitude
 # subj_amplitude_sd
@@ -135,7 +135,7 @@ mu = rep(0, n_x)
 
 # covariance matrix with hyperparameters
 amplitudes = 2
-volatilities = 0.1
+volatilities = .1
 
 Sigmas = matrix(0, n_x, n_x)
 for (i in 1:n_x){
@@ -145,12 +145,12 @@ for (i in 1:n_x){
 }
 
 # # these approximately correspond to the peak of the prior
-n = 20
+n = 5
 fs = mvrnorm(n, mu, Sigmas)
 fs_df = data.frame(t(fs))
 fs_df %>%
   gather(sample, position, 1:n, factor_key = T) -> fs_df
-fs_df$time = rep(1:count(fs_df$sample)$freq[1], n)
+fs_df$time = rep(1:table(fs_df$sample)[[1]], n)
 
 fs_df %>%
   ggplot()+
@@ -185,8 +185,8 @@ stan_data = list(
   , subj = as.numeric(factor(df_long_trimz$id))
 )
 
-# package for googleComputeEngine
-save(stan_data, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/stan_data.Rdata")
+# # package for googleComputeEngine
+# save(stan_data, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/stan_data.Rdata")
 
 # see cluster_analysis
 
@@ -194,18 +194,20 @@ save(stan_data, file = "/Users/ghislaindentremont/Documents/Experiments/Trajecto
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/cluster_test_post.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/post.rdata")
 
 # how long did it take (in hours)?
-# 100 iter, took roughly 2 hours
+# 400 iter, took roughly 8 hours
 sort(rowSums(get_elapsed_time(post)/60/60))
 
-# the estimates of these parameters are quite bad
+# volatility and amplitude are relatively difficult to estimate
+# might be the max_treedepth problem
 stan_res = ezStan::stan_summary(
   from_stan = post
   , par = c('volatility','amplitude', 'subj_noise_sd', 'subj_noise' )
 )
 
+# the functions did not sample well either 
 ezStan::stan_summary(
   from_stan = post
   , par = c('f')
@@ -299,7 +301,7 @@ to_plot %>%
   geom_line(aes(x=time, y=med_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), color = "red")+
   geom_line(aes(x=time, y=hi95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "red")+
   geom_line(aes(x=time, y=lo95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "red")+
-  geom_line(data=subset(df_condition_meansz, target_final == "1"), aes(x=time_lores*length(x_list$n_x)/bin_width, y=position_bin_grand_avg), alpha = 0.5)+
+  geom_line(data=subset(df_condition_meansz, target_final == "1"), aes(x=time_lores*length(n_x)/bin_width, y=position_bin_grand_avg), alpha = 0.5)+
   ylab('value')+
   xlab('time')
 
@@ -308,6 +310,6 @@ to_plot %>%
   geom_line(aes(x=time, y=med_1*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), color = "turquoise")+
   geom_line(aes(x=time, y=hi95_1*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "turquoise")+
   geom_line(aes(x=time, y=lo95_1*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "turquoise")+
-  geom_line(data=subset(df_condition_meansz, target_final == "0"), aes(x=time_lores*length(x_list$n_x)/bin_width, y=position_bin_grand_avg), alpha = 0.5)+
+  geom_line(data=subset(df_condition_meansz, target_final == "0"), aes(x=time_lores*length(n_x)/bin_width, y=position_bin_grand_avg), alpha = 0.5)+
   ylab('value')+
   xlab('time')

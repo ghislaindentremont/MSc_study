@@ -123,8 +123,8 @@ transformed parameters{
 	# subj_f: per-subject GPs
 	vector[n_x] subj_f[n_w,n_subj] ;
 
-	#next line implies volatility ~ cauchy(0,10)
-	volatility = 10*tan(volatility_helper) ;
+	#next line implies volatility ~ cauchy(0,3)
+	volatility = 3*tan(volatility_helper) ;
 
 	# loop over predictors, computing population GP and per-subject GPs
 	for(wi in 1:n_w){
@@ -165,10 +165,10 @@ model {
 	subj_noise ~ normal(0,subj_noise_sd) ;  #peaked at 0
 
 	# volatility priors:
-	# - population GPs have volatility ~ cauchy(0,10)
+	# - population GPs have volatility ~ cauchy(0,3)
 	# - per-subject GPs have subj_volatility ~ cauchy(0,subj_volatility_sd)
 	# - subj_volatility pooled via subj_volatility_sd
-	subj_volatility_sd ~ weibull(2,10) ;#peaked around 8
+	subj_volatility_sd ~ weibull(2,3) ;#peaked around 3
 
 	# amplitude priors
 	# - population GPs have amplitude as weibull peaked at .8

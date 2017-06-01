@@ -15,14 +15,14 @@ mod = rstan::stan_model("gp_regression.stan")
 post = sampling(
   mod
   , data = stan_data
-  , iter = 100
+  , iter = 400
   , init = 0
-  , include = F
   , chains = 16
   , cores = 16
   , verbose = T
   , refresh = 1
-  # , control = list(max_treedepth = 15)
+  , control = list(max_treedepth = 15)
+  , include = F
   , pars = c(
   'f_normal01'
   , 'subj_f_normal01'
@@ -34,6 +34,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'cluster_test_post.rdata'
+  , file = 'post_maxtree.rdata'
 )
 
