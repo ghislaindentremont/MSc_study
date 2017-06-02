@@ -1,77 +1,57 @@
-functions{
-
-	# GP: computes noiseless Gaussian Process given pre-computed unique distances
-	vector GP(real volatility, real amplitude, vector normal01, int n_x, int n_dx, vector dx_unique, int [,] dx_index) {
-
-		# covars: unique entries in covariance matrix
-		vector[n_dx] covars ;
-
-		# covMat: covariance matrix
-		matrix[n_x,n_x] covMat ;
-
-		# compute unique entries in covariance matrix
-		covars = exp(dx_unique*(volatility^2))*(amplitude^2) ;
-		covars[1] = (amplitude^2) + .001 ; #jitter diagonal for positive definiteness
-
-		# loop throug the covariance matrix, copying in entries
-		for(i in 1:(n_x-1)){
-			covMat[i,i] = covars[1] ;
-			for(j in (i+1):n_x){
-				covMat[i,j] = covars[dx_index[i,j]] ;
-				covMat[j,i] = covMat[i,j] ;
-			}
+functions{ // This Stan file is largely cribbed from Mike Lawrence's GP examples
+	# GP: computes noiseless Gaussian Process
+	vector GP(real volatility, real amplitude, vector normal01, int n_x, real[] x ) {
+		matrix[n_x,n_x] cov_mat ;
+		real amplitude_sq_plus_jitter ;
+		amplitude_sq_plus_jitter = amplitude^2 + 1e-6 ;
+		cov_mat = cov_exp_quad(x, amplitude, 1/volatility) ;
+		for(i in 1:n_x){
+			cov_mat[i,i] = amplitude_sq_plus_jitter ;
 		}
-		covMat[n_x,n_x] = covars[1] ; #final diagonal entry
-
-		# combine with normal01 & return
-		return(cholesky_decompose(covMat) * normal01 ) ;
-
+		return(cholesky_decompose(cov_mat) * normal01 ) ;
 	}
-
 }
 
 data {
 
-	# n_dx: number of unique x-distances
-	int<lower=1> n_dx ;
-
-	# dx_unique: vector of unique x-distances
-	vector[n_dx] dx_unique ;
-
-	# n_x: number of unique x values
-	int<lower=1> n_x ;
-
-	# dx_index: matrix of indices into the x-distance matrix of each value in dx_unique
-	int dx_index[n_x,n_x] ;
-
 	# n_y: number of observations in y
-	int<lower=1> n_y ;
+	int n_y ;
 
 	# y: vector of observations for y
+	#	 should be scaled to mean=0,sd=1
 	vector[n_y] y ;
 
-	# x_index: vector indicating which x is associated with each y
+	# n_x: number of unique x values
+	int n_x ;
+
+	# x: unique values of x
+	#	 should be scaled to min=0,max=1
+	real x[n_x] ;
+
+	# x_index: vector indicating which x is associated zith each y
 	int x_index[n_y] ;
 
-	# n_w: number of columns in predictor matrix w
-	int n_w ;
+	# n_z: number of columns in predictor matrix z
+	int n_z ;
 
-	# w: predictor matrix (each column gets its own GP)
-	matrix[n_y,n_w] w ;
+	// # rows_z_unique: number of rows in predictor matrix z
+	// int rows_z_unique ;
+	// 
+	// # z_unique: predictor matrix (each column gets its own GP)
+	// matrix[rows_z_unique,n_z] z_unique ;
+	// 
+	// # z_by_f_index:
+	// int z_by_f_index[n_y] ;
+	
+	# z: predictor matrix (each column gets its own GP)
+	matrix[n_y,n_z] z ;
 
+  // Hierarchical
 	# n_subj: number of subjects
 	int<lower=1> n_subj ;
 
-	# n_subj: vector indicating which subject is associated with each y
+	# n_subj: vector indicating which subject is associated  with each y
 	int<lower=1,upper=n_subj> subj[n_y] ;
-
-}
-
-transformed data{
-
-	# y_scaled: z-transform of y (for easy prior specification)
-	vector[n_y] y_scaled ;
-	y_scaled = (y-mean(y))/sd(y) ;
 
 }
 
@@ -84,72 +64,72 @@ parameters {
 	real<lower=0> subj_noise_sd ;
 
 	# volatility_helper: helper for cauchy-distributed volatility (see transformed parameters)
-	vector<lower=0,upper=pi()/2>[n_w] volatility_helper ;
+	vector<lower=0,upper=pi()/2>[n_z] volatility_helper ;
 
 	# subj_volatility_helper: helper for cauchy-distributed volitilities per subject (see transformed parameters)
-	vector<lower=0,upper=pi()/2>[n_subj] subj_volatility_helper[n_w] ;
+	vector<lower=0,upper=pi()/2>[n_subj] subj_volatility_helper[n_z] ;
 
 	# subj_volatility_sd: sd of subject volitilities
-	vector<lower=0>[n_w] subj_volatility_sd ;
+	vector<lower=0>[n_z] subj_volatility_sd ;
 
 	# amplitude: amplitude of population GPs
-	vector<lower=0>[n_w] amplitude ;
+	vector<lower=0>[n_z] amplitude ;
 
 	# subj_amplitude: amplitude of per-subject GPs
-	vector<lower=0>[n_subj] subj_amplitude[n_w] ;
+	vector<lower=0>[n_subj] subj_amplitude[n_z] ;
 
 	# subj_amplitude_sd: sd of subj_amplitude
-	vector<lower=0>[n_w] subj_amplitude_sd ;
+	vector<lower=0>[n_z] subj_amplitude_sd ;
 
-	# f_normal01: helper variable for population GPs (see transformed parameters)
-	vector[n_x] f_normal01[n_w] ;
+	# f_normal01: helper variable for GPs (see transformed parameters)
+	matrix[n_x, n_z] f_normal01 ;
 
 	# f_normal01: helper variable for per-subject GPs (see transformed parameters)
-	vector[n_x] subj_f_normal01[n_w,n_subj] ;
+	matrix[n_x, n_z] subj_f_normal01[n_subj] ;
 
 }
 
 transformed parameters{
 
 	# volatility: volatility of population GPs
-	vector[n_w] volatility ;
+	vector[n_z] volatility ;
 
 	# volatility: volatility of per-subject GPs
-	vector[n_subj] subj_volatility[n_w] ;
+	vector[n_subj] subj_volatility[n_z] ;
 
-	# f: population GPs
-	vector[n_x] f[n_w] ;
+	# f: Population GPs
+	matrix[n_x,n_z] f ;
 
 	# subj_f: per-subject GPs
-	vector[n_x] subj_f[n_w,n_subj] ;
+	matrix[n_x,n_z] subj_f[n_subj] ;
 
 	#next line implies volatility ~ cauchy(0,3)
 	volatility = 3*tan(volatility_helper) ;
 
 	# loop over predictors, computing population GP and per-subject GPs
-	for(wi in 1:n_w){
+	for(zi in 1:n_z){
 
 		# next line implies subj_volatility ~ cauchy(0,subj_volatility_sd)
-		subj_volatility[wi] = subj_volatility_sd[wi] * tan(subj_volatility_helper[wi]) ;
+		subj_volatility[zi] = subj_volatility_sd[zi] * tan(subj_volatility_helper[zi]) ;
 
 		# population GP
-		f[wi] = GP(
-			volatility[wi]
-			, amplitude[wi]
-			, f_normal01[wi]
-			, n_x , n_dx , dx_unique , dx_index
+		f[,zi] = GP(
+			  volatility[zi]
+			, amplitude[zi]
+			, f_normal01[,zi]
+			, n_x , x
 		) ;
 
 		# loop over subjects, computing per-subject GPs
 		for(si in 1:n_subj){
 
 			# per-subject GP
-			subj_f[wi,si] = f[wi] +
+			subj_f[si, ,zi] = f[,zi] +
 				GP(
-					subj_volatility[wi][si]
-					, subj_amplitude[wi][si]
-					, subj_f_normal01[wi,si]
-					, n_x , n_dx , dx_unique , dx_index
+					subj_volatility[zi][si]
+					, subj_amplitude[zi][si]
+					, subj_f_normal01[si][,zi]
+					, n_x , x
 				) ;
 
 		}
@@ -175,35 +155,47 @@ model {
 	# - per-subject GPs have amplitude as normal peaked at zero with pooled sd
 	amplitude ~ weibull(2,1) ; #peaked at .8ish
 	subj_amplitude_sd ~ weibull(2,1) ;#peaked at .8ish
-	for(wi in 1:n_w){
-		subj_amplitude[wi] ~ normal(0,subj_amplitude_sd[wi]) ; #peaked at 0
+	for(zi in 1:n_z){
+		subj_amplitude[zi] ~ normal(0,subj_amplitude_sd[zi]) ; #peaked at 0
 	}
 
 	# normal(0,1) priors on GP helpers
-	for(wi in 1:n_w){
-		f_normal01[wi] ~ normal(0,1);
-		for(si in 1:n_subj){
-			subj_f_normal01[wi,si] ~ normal(0,1) ;
-		}
+	to_vector(f_normal01) ~ normal(0,1);
+	for(si in 1:n_subj){
+		to_vector(subj_f_normal01[si]) ~ normal(0,1) ;
 	}
-
+  
+//   # loop over observations
+// 	{
+// 		# subj_noise_exp: exponentiated subj_noise
+// 		vector[n_subj] subj_noise_exp ;
+// 		subj_noise_exp = exp(subj_noise) ;
+// 		
+// 		matrix[rows_z_unique,n_x] z_by_f[n_subj];
+// 		for(i in 1:rows_z_unique){
+// 			for(j in 1:n_x){
+// 			  for(k in 1:n_subj){
+// 				z_by_f[k][i,j] = sum(z_unique[i].*subj_f[k][j,]) ;  // this isn't quite right
+// 			  }
+// 			}
+// 		}
+// 		for(si in 1:n_subj) {
+//   		y ~ normal(
+//   			  to_vector(z_by_f[si])[z_by_f_index]
+//   			, subj_noise_exp[si]
+//   		);
+// 		}
+// 	}
+  
 	# set local environment to so subj_noise_exp isn't saved
 	{
 		# subj_noise_exp: exponentiated subj_noise
 		vector[n_subj] subj_noise_exp ;
 		subj_noise_exp = exp(subj_noise) ;
 
-		# loop over observations
-		for(yi in 1:n_y){
-			real temp ;
-			temp = 0 ;
-			# loop over predictors to gather sum for this observation's mean
-			for(wi in 1:n_w){
-				temp = temp + w[yi,wi] * subj_f[wi,subj[yi]][x_index[yi]] ;
-			}
-			# y_scaled as temp with gaussian noise
-			y_scaled[yi] ~ normal( temp , subj_noise_exp[subj[yi]] ) ;
-		}
+  	for(yi in 1:n_y){
+  	  y[yi] ~ normal(sum(z[yi].*subj_f[subj[yi]][x_index[yi],]), subj_noise_exp[subj[yi]]);
+  	}
 	}
-
+	
 }

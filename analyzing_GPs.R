@@ -3,6 +3,7 @@ library(tidyverse)
 library(rstan)
 library(ezStan)
 library(MASS)
+library(reshape2)
 
 # load a function to do some pre-computation on x
 source('~/Documents/Experiments/Trajectory/GP Demos/Mike Demos/gp_example/prep_x.R')
@@ -160,35 +161,85 @@ fs_df %>%
 
 
 # Rstan ----
-x_list = prep_x(df_long_trimz$time_lores)  
+# get the sorted unique value for x
+x = sort(unique(df_long_trimz$time_lores))
 
-print(x_list$n_x)
+# for each value in df_long_trimz$x, get its index x
+x_index = match(df_long_trimz$time_lores,x)
 
-# get the predictor matrix W
-W = ezStan::get_contrast_matrix(
+# do something similar for the subjects 
+s = sort(unique(df_long_trimz$id))
+s_index = match(df_long_trimz$id, s)
+
+# compute the model matrix
+z = model.matrix(
   data = df_long_trimz
-  , formula = ~ target_final
+  , object = ~ target_final
 )
 
-# we use same data as before, but a different model
-stan_data = list(
-  n_dx = x_list$n_dx
-  , dx_unique = x_list$dx_unique
-  , n_x = x_list$n_x
-  , dx_index = x_list$dx_index
-  , n_y = nrow(df_long_trimz)
-  , y = df_long_trimz$position_bin
-  , x_index = x_list$x_index
-  , n_w = ncol(W)
-  , w = W
+# compute the unique entries in the model matrix
+temp = as.data.frame(z)
+temp = tidyr::unite_(data = temp, col = 'combined', from = names(temp))
+temp_unique = unique(temp)
+z_unique = z[row.names(z)%in%row.names(temp_unique),]
+
+# for each row in z, get its index z_unique
+z_unique_index = match(temp$combined,temp_unique$combined)
+
+# combine the two index objects to get the index into the flattened z_by_f vector
+z_by_f_index = z_unique_index + (x_index-1)*nrow(z_unique)
+
+z_by_f_by_s = array(split(z_by_f_index, s_index))
+
+subj_obs = NULL
+for (si in 1:length(z_by_f_by_s)) {
+  subj_obs = c(subj_obs, length(z_by_f_by_s[[si]]))
+}
+
+z_by_f_by_s_pad = array(list(vector()), dim = length(z_by_f_by_s))
+for (si in 1:length(z_by_f_by_s)) {
+  z_by_f_by_s_pad[[si]] = c(z_by_f_by_s[[si]], rep(0, 10000 - subj_obs[si]))
+}
+
+
+# create the data list for stan
+data_for_stan = list(
+  n_y = nrow(df_long_trimz)
+  , y = scale(df_long_trimz$position_bin)[,1]  # scaled to mean=0,sd=1
+  , n_x = length(x)
+  , x = (x-min(x))/(max(x)-min(x)) #scaled to min=0,max=1
+  , x_index = x_index
+  , n_z = ncol(z)
+  # , rows_z_unique = nrow(z_unique)
+  # , z_unique = z_unique
+  # , z_by_f_index = z_by_f_by_s
+  , z = z
   , n_subj = length(unique(df_long_trimz$id))
-  , subj = as.numeric(factor(df_long_trimz$id))
+  , subj = s_index
 )
 
-# # package for googleComputeEngine
-# save(stan_data, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/stan_data.Rdata")
+# package for googleComputeEngine
+save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/stan_data.Rdata")
 
-# see cluster_analysis
+# # see cluster_analysis
+# mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
+# post_test = sampling(
+#   mod
+#   , data = data_for_stan
+#   , iter = 100
+#   , init = 0
+#   , chains = 4
+#   , cores = 4
+#   , verbose = T
+#   , refresh = 1
+#   , include = F
+#   , pars = c(
+#     'f_normal01'
+#     , 'subj_f_normal01'
+#     , 'volatility_helper'
+#     , 'subj_volatility_helper'
+#   )
+# )
 
 
 # Examine Results ----
