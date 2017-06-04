@@ -15,25 +15,25 @@ mod = rstan::stan_model("gp_regression.stan")
 post = sampling(
   mod
   , data = data_for_stan
-  , iter = 400
+  , iter = 1000
   , init = 0
   , chains = 16
   , cores = 16
   , verbose = T
   , refresh = 1
-  # , control = list(max_treedepth = 15)
+  , control = list(max_treedepth = 15)
   , include = F
   , pars = c(
   'f_normal01'
-  , 'subj_f_normal01'
+  # , 'subj_f_normal01'
   , 'volatility_helper'
-  , 'subj_volatility_helper'
+  # , 'subj_volatility_helper'
   )
 )
 
 #save result for later
 save(
   post
-  , file = 'post_fast.rdata'
+  , file = 'post_group.rdata'
 )
 
