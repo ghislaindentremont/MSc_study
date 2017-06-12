@@ -140,38 +140,38 @@ df_long$target_fixed = factor(df_long$target_fixed)
 #   facet_grid(.~target_fixed)+
 #   theme(legend.position = "none")
 
-df_long %>%
-  spread(frame, position) %>%
-  group_by(id, coordinate) %>%
-  dplyr::mutate(
-    target_lead = ifelse(
-      id %in% c("002", "003", "004", "007", "008", "009", "012", "016", "017", "018", "019")
-      , as.character(dplyr::lead(target, 12))
-      , as.character(target)
-    )
-  ) %>%
-  gather(frame, position, 1:800) -> df_long
-df_long$target_lead = factor(df_long$target_lead)
+# df_long %>%
+#   spread(frame, position) %>%
+#   group_by(id, coordinate) %>%
+#   dplyr::mutate(
+#     target_lead = ifelse(
+#       id %in% c("002", "003", "004", "007", "008", "009", "012", "016", "017", "018", "019")
+#       , as.character(dplyr::lead(target, 12))
+#       , as.character(target)
+#     )
+#   ) %>%
+#   gather(frame, position, 1:800) -> df_long
+# df_long$target_lead = factor(df_long$target_lead)
 
-# compare fixed vs.original target assignments
-compare_mappings = ddply(
-  .data = df_long
-  , .variables = c("id", "coordinate", "trial")
-  , .fun = function(df_piece){
-    target = unique(df_piece$target)
-    target_fixed = unique(df_piece$target_fixed)
-    target_lead = unique(df_piece$target_lead)
-    target_lead = target_lead[!is.na(target_lead)]
-    df = data.frame(
-      target = target
-      , target_fixed = target_fixed
-      , target_lead = target_lead
-      )
-    return(df)
-  }
-)
-compare_mappings %>%
-  dplyr::filter(coordinate == "z") -> compare_mappings
+# # compare fixed vs.original target assignments
+# compare_mappings = ddply(
+#   .data = df_long
+#   , .variables = c("id", "coordinate", "trial")
+#   , .fun = function(df_piece){
+#     target = unique(df_piece$target)
+#     target_fixed = unique(df_piece$target_fixed)
+#     target_lead = unique(df_piece$target_lead)
+#     target_lead = target_lead[!is.na(target_lead)]
+#     df = data.frame(
+#       target = target
+#       , target_fixed = target_fixed
+#       , target_lead = target_lead
+#       )
+#     return(df)
+#   }
+# )
+# compare_mappings %>%
+#   dplyr::filter(coordinate == "z") -> compare_mappings
 
 df_long %>%
   dplyr::filter(id != "002", id != "018") %>%  # get rid of 2 and 18
@@ -278,7 +278,7 @@ proc.time() - ptm
 # get rid of df_long after clean is created
 rm(df_long)
 
-# what trials do we have? Participant 004 has nearly no trials after exclusion! 
+# what trials do we have? 
 df_long_clean %>%
   group_by(id) %>%
   dplyr::summarize(

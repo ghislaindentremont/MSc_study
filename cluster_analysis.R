@@ -1,5 +1,7 @@
 # Upload stan_data ----
-load("stan_data.Rdata")
+# load("stan_data.Rdata")
+load("stan_data_15.Rdata")
+# load("stan_data_21.rdata")
 
 
 # Load Packages ----
@@ -13,9 +15,9 @@ mod = rstan::stan_model("gp_regression.stan")
 
 # set the model running on each core
 post = sampling(
-  mod
+ mod
   , data = data_for_stan
-  , iter = 1000
+  , iter = 3000
   , init = 0
   , chains = 16
   , cores = 16
@@ -25,15 +27,15 @@ post = sampling(
   , include = F
   , pars = c(
   'f_normal01'
-  # , 'subj_f_normal01'
+  , 'subj_f_normal01'
   , 'volatility_helper'
-  # , 'subj_volatility_helper'
+  , 'subj_volatility_helper'
   )
 )
 
 #save result for later
 save(
   post
-  , file = 'post_group.rdata'
+  , file = 'post_01_15.rdata'
 )
 

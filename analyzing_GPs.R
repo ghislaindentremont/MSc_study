@@ -19,6 +19,11 @@ summary(df_long_trim)
 
 head(df_long_trim)
 
+# set trial start to zero
+df_long_trim %>%
+  group_by(id, trial, coordinate) %>%
+  dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
+
 # it looks like there is a slight sub-grouping within each target condition. Probably explained by the cues which 
 # are ignored here
 # also, you can see impact of rounding time. There are sometimes two data points for a given time point
@@ -77,7 +82,7 @@ round0 = function(x,z){
 }
 # will the trajectories be good enough with this low-resolution?
 # I average over bin to make analysis compute time reasonable
-bin_width = 10
+bin_width = 7
 df_long_trimz$time_lores = round0(df_long_trimz$time, bin_width)
 
 df_long_trimz %>% 
@@ -115,11 +120,11 @@ df_condition_meansz %>%
 # Establish Prior ----
 # volatility
 # subj_volatility_sd
-curve(dweibull(x, 2, 3), 0, 10, ylab = "density", xlab = "subject volatility sd")
+curve(dweibull(x, 2, 10), 0, 10, ylab = "density", xlab = "subject volatility sd")
 # subj_volatility
-curve(dcauchy(x, 0, mean(rweibull(1000, 2, 3))), 0, 20, ylab = "density", xlab = "subject volatility")
+curve(dcauchy(x, 0, mean(rweibull(1000, 2, 10))), 0, 20, ylab = "density", xlab = "subject volatility")
 # volatility
-curve(dcauchy(x, 0, 3), 0, 20, ylab = "density", xlab = "population volatility")
+curve(dcauchy(x, 0, 20), 0, 50, ylab = "density", xlab = "population volatility")
 
 # amplitude
 # subj_amplitude_sd
@@ -138,7 +143,7 @@ mu = rep(0, n_x)
 
 # covariance matrix with hyperparameters
 amplitudes = 2
-volatilities = 5  # not any bigger than this
+volatilities = 10  # not any bigger than this
 
 Sigmas = matrix(0, n_x, n_x)
 for (i in 1:n_x){
@@ -157,7 +162,7 @@ fs_df$time = rep(1:table(fs_df$sample)[[1]], n)
 
 fs_df %>%
   ggplot()+
-    geom_line(aes(x=time, y=position, color=sample), alpha=0.5)+
+    geom_line(aes(x=time, y=position, color=sample))+  #, alpha=0.5)+
     theme(legend.position = "none")
 
 
@@ -177,8 +182,11 @@ s_index = match(df_long_trimz$id, s)
 z = model.matrix(
   data = df_long_trimz
   , object = ~ target_final
-  , contrasts.arg = contr.sum
 )
+# z = get_contrast_matrix(
+#   df_long_trimz
+#   , ~ target_final
+# )
 
 # compute the unique entries in the model matrix
 temp = as.data.frame(z)
@@ -199,79 +207,212 @@ for (si in 1:length(z_by_f_by_s)) {
   subj_obs = c(subj_obs, length(z_by_f_by_s[[si]]))
 }
 
-z_by_f_by_s_pad = array(list(vector()), dim = length(z_by_f_by_s))
-for (si in 1:length(z_by_f_by_s)) {
-  z_by_f_by_s_pad[[si]] = c(z_by_f_by_s[[si]], rep(0, 10000 - subj_obs[si]))
+z_by_f_by_s_pad = array(0,dim=c(16,10000))
+for (si in 1:length(subj_obs)) {
+  z_by_f_by_s_pad[si,] = c(z_by_f_by_s[[si]], rep(0, 10000 - subj_obs[si]))
 }
 
+y = scale(df_long_trimz$position_bin)[,1]  # scaled to mean=0,sd=1
+y_by_s = array(split(y, s_index))
+
+y_by_s_pad = array(0,dim=c(16,10000))
+for (si in 1:length(subj_obs)) {
+  y_by_s_pad[si,] = c(y_by_s[[si]], rep(0, 10000 - subj_obs[si]))
+}
 
 # create the data list for stan
 data_for_stan = list(
   n_y = nrow(df_long_trimz)
-  , y = scale(df_long_trimz$position_bin)[,1]  # scaled to mean=0,sd=1
+  , y = y_by_s_pad
   , n_x = length(x)
   , x = (x-min(x))/(max(x)-min(x)) #scaled to min=0,max=1
   , x_index = x_index
-  # , n_subj = length(s)
-  # , subj = s_index
+  , n_subj = length(s)
   , n_z = ncol(z)
   , rows_z_unique = nrow(z_unique)
   , z_unique = z_unique
-  # , z_by_f_by_s_pad = z_by_f_by_s_pad
-  , z_by_f_index = z_by_f_index
-  # , subj_obs = subj_obs
+  , z_by_f_by_s_pad = z_by_f_by_s_pad
+  , subj_obs = subj_obs
 )
 
 # # package for googleComputeEngine
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/stan_data.Rdata")
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/stan_data_15.Rdata")
 
-# # see cluster_analysis
-mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
-post_test = sampling(
-  mod
-  , data = data_for_stan
-  , iter = 1000
-  , init = 0
-  , chains = 4
-  , cores = 4
-  , verbose = T
-  , control = list(max_treedepth = 15)
-  , refresh = 1
-  , include = F
-  , pars = c(
-    'f_normal01'
-    , 'subj_f_normal01'
-    , 'volatility_helper'
-    , 'subj_volatility_helper'
-  )
-)
-post = post_test
-save(post, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/post_test.rdata")
+# # # see cluster_analysis
+# mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
+# post_test = sampling(
+#   mod
+#   , data = data_for_stan
+#   , iter = 100
+#   , init = 0
+#   , chains = 2
+#   , cores = 2
+#   , verbose = T
+#   , control = list(max_treedepth = 15)
+#   , refresh = 1
+#   , include = F
+#   , pars = c(
+#     'f_normal01'
+#     , 'subj_f_normal01'
+#     , 'volatility_helper'
+#     , 'subj_volatility_helper'
+#   )
+# )
+# post = post_test
+# save(post, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/post_test.rdata")
 
 
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/post_fast.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/post_01_15.rdata")
 
 # how long did it take (in hours)?
-# 400 iter took roughly 8 hours for slower version
-# 400 iter took roughly 12 hours for 'faster' version
+# post_centered_0.5 took 6 hours! But, intercept volatility median estimate is 5.3! Should widen prior:
+# post_centered_0.5_wideprior took 6 hours. Volatility intercept is now 5.5. That's a substantial shift.
+# post_21 took 22 hours, almost 4 times longer than post_centered_0.5_wideprior,
+# despite only having twice as large of a covariance matrix
+# post_cauchy20 took a little over 5 hours 
+# post_01 took a little over 8 hours (i.e. it seems to take longer to sample with 01 contrast matrix)
+# post_01_15 took roughly 20 hours 
 sort(rowSums(get_elapsed_time(post)/60/60))
 
-# volatility and amplitude are relatively difficult to estimate
-# might be the max_treedepth problem
-stan_res = ezStan::stan_summary(
+ezStan::stan_summary(
   from_stan = post
   , par = c('volatility','amplitude', 'subj_noise_sd', 'subj_noise' )
 )
 
-# the functions did not sample well either 
+# the intercept samples well with 
 ezStan::stan_summary(
   from_stan = post
   , par = c('f')
 )
 
+# look at subject-by-subject estimates
+ezStan::stan_summary(
+  from_stan = post
+  , par = c('subj_f')
+)
+
+# visualize subject GPs
+subj_f = rstan::extract(
+  post
+  , pars = 'subj_f'
+)[[1]]
+
+# intercept
+subj_intercept = NULL
+for (si in 1:dim(subj_f)[2]) {
+  temp = data.frame(subj_f[,si,,1])
+  temp$id = si
+  temp$sample = 1:nrow(temp)
+  subj_intercept = rbind(subj_intercept, temp)
+}
+
+subj_f_I = subj_intercept %>%
+  gather(key="time", value="value", -c(sample, id)) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , parameter = 1
+  )
+subj_f_I_sum = subj_f_I %>%
+  dplyr::group_by(
+    time
+    , id
+  ) %>%
+  dplyr::summarise(
+    med = median(value)
+    , lo95 = quantile(value,.025)
+    , hi95 = quantile(value,.975)
+    , lo50 = quantile(value,.25)
+    , hi50 = quantile(value,.75)
+  )
+subj_f_I_sum %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med, color=factor(id)))+
+  geom_line(aes(x=time, y=hi95, color=factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95, color=factor(id)), linetype = "dashed")+
+  ggtitle("intercepts")
+
+# effect
+subj_effect = NULL
+for (si in 1:dim(subj_f)[2]) {
+  temp = data.frame(subj_f[,si,,2])
+  temp$id = si
+  temp$sample = 1:nrow(temp)
+  subj_effect = rbind(subj_effect, temp)
+}
+
+subj_f_e = subj_effect %>%
+  gather(key="time", value="value", -c(sample, id)) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , parameter = 1
+  )
+subj_f_e_sum = subj_f_e %>%
+  dplyr::group_by(
+    time
+    , id
+  ) %>%
+  dplyr::summarise(
+    med = median(value)
+    , lo95 = quantile(value,.025)
+    , hi95 = quantile(value,.975)
+    , lo50 = quantile(value,.25)
+    , hi50 = quantile(value,.75)
+  )
+subj_f_e_sum %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med, color=factor(id)))+
+  geom_line(aes(x=time, y=hi95, color=factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95, color=factor(id)), linetype = "dashed")+
+  ggtitle("effects")
+
+# get GP of conditions
+subj_f_sum = subj_f_I
+subj_f_sum$value2 = subj_f_e$value
+subj_condition1 = subj_f_sum$value 
+subj_condition2 = subj_f_sum$value + subj_f_sum$value2
+subj_f_sum = cbind(subj_f_sum, data.frame(condition1 = subj_condition1, condition2 = subj_condition2))
+
+subj_to_plot = subj_f_sum %>%
+  dplyr::group_by(
+    time
+    , id
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(condition1)
+    , lo95_1 = quantile(condition1,.025)
+    , hi95_1 = quantile(condition1,.975)
+    , lo50_1 = quantile(condition1,.25)
+    , hi50_1 = quantile(condition1,.75)
+    
+    , med_2 = median(condition2)
+    , lo95_2 = quantile(condition2,.025)
+    , hi95_2 = quantile(condition2,.975)
+    , lo50_2 = quantile(condition2,.25)
+    , hi50_2 = quantile(condition2,.75)
+  )
+
+subj_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)))+
+  geom_line(aes(x=time, y=hi95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)), linetype = "dashed")+
+  geom_line(data = subset(df_id_meansz, target_final == "1"), aes(x=time_lores/bin_width+1, y=position_bin_avg, group = id), alpha = 1)+
+  ylab('value')+
+  xlab('time')
+
+subj_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)))+
+  geom_line(aes(x=time, y=hi95_1*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95_1*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)), linetype = "dashed")+
+  geom_line(data = subset(df_id_meansz, target_final == "0"), aes(x=time_lores/bin_width+1, y=position_bin_avg, group = id), alpha = 1)+
+  ylab('value')+
+  xlab('time')
+
+ 
 # visualize GPs
 f = rstan::extract(
   post
@@ -300,6 +441,7 @@ f_I_sum = f_I %>%
   )
 f_I_sum %>%
   ggplot()+
+  ggtitle("intercept")+
   geom_line(aes(x=time, y=med))+
   geom_line(aes(x=time, y=hi95), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95), linetype = "dashed")
@@ -326,6 +468,7 @@ f_e_sum = f_e %>%
   )
 f_e_sum %>%
   ggplot()+
+  ggtitle("effect")+
   geom_line(aes(x=time, y=med))+
   geom_line(aes(x=time, y=hi95), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95), linetype = "dashed")
@@ -333,7 +476,7 @@ f_e_sum %>%
 # get GP of conditions
 f_sum = f_I
 f_sum$value2 = f_e$value
-condition1 = f_sum$value 
+condition1 = f_sum$value
 condition2 = f_sum$value + f_sum$value2
 f_sum = cbind(f_sum, data.frame(condition1 = condition1, condition2 = condition2))
 
