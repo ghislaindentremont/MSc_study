@@ -1,6 +1,7 @@
 # Upload stan_data ----
+load("fake_stan_data_11.Rdata")
 # load("stan_data.Rdata")
-load("stan_data_15.Rdata")
+# load("stan_data_15.Rdata")
 # load("stan_data_21.rdata")
 
 
@@ -17,7 +18,7 @@ mod = rstan::stan_model("gp_regression.stan")
 post = sampling(
  mod
   , data = data_for_stan
-  , iter = 3000
+  , iter = 1000
   , init = 0
   , chains = 16
   , cores = 16
@@ -36,6 +37,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'post_01_15.rdata'
+  , file = 'fake1_post_11.rdata'
 )
 

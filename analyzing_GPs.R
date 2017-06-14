@@ -11,18 +11,19 @@ rstan_options(auto_write = TRUE)
 source('~/Documents/Experiments/Trajectory/GP Demos/Mike Demos/gp_example/prep_x.R')
 
 # load a function to do some pre-computation on x
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/data_trim.Rdata")
-
+# load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/data_trim.Rdata")
+df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data1.rds")
+df_long_trim$coordinate = "z"
 
 # Look at Data ----
 summary(df_long_trim)
 
 head(df_long_trim)
 
-# set trial start to zero
-df_long_trim %>%
-  group_by(id, trial, coordinate) %>%
-  dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
+# # set trial start to zero
+# df_long_trim %>%
+#   group_by(id, trial, coordinate) %>%
+#   dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
 
 # it looks like there is a slight sub-grouping within each target condition. Probably explained by the cues which 
 # are ignored here
@@ -82,11 +83,12 @@ round0 = function(x,z){
 }
 # will the trajectories be good enough with this low-resolution?
 # I average over bin to make analysis compute time reasonable
-bin_width = 7
+# bin_width = 10
+bin_width = 0.1
 df_long_trimz$time_lores = round0(df_long_trimz$time, bin_width)
 
 df_long_trimz %>% 
-  group_by(id, coordinate, trial, time_lores, target_final) %>%
+  group_by(id, coordinate, trial, time_lores, target_final) %>%  # this is important because it organizes by id
   dplyr::summarise(position_bin = mean(position)) -> df_long_trimz
 df_long_trimz %>%
   dplyr::filter(as.numeric(id) < 10) %>%
@@ -236,7 +238,7 @@ data_for_stan = list(
 )
 
 # # package for googleComputeEngine
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/stan_data_15.Rdata")
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_stan_data_11.Rdata")
 
 # # # see cluster_analysis
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
@@ -265,7 +267,7 @@ data_for_stan = list(
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/post_01_15.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake1_post_11.rdata")
 
 # how long did it take (in hours)?
 # post_centered_0.5 took 6 hours! But, intercept volatility median estimate is 5.3! Should widen prior:
@@ -280,6 +282,11 @@ sort(rowSums(get_elapsed_time(post)/60/60))
 ezStan::stan_summary(
   from_stan = post
   , par = c('volatility','amplitude', 'subj_noise_sd', 'subj_noise' )
+)
+
+ezStan::stan_summary(
+  from_stan = post
+  , par = c('subj_volatility_sd','subj_amplitude_sd')
 )
 
 # the intercept samples well with 
@@ -498,12 +505,16 @@ to_plot = f_sum %>%
     , hi50_2 = quantile(condition2,.75)
   )
 
+# load real population means 
+df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data1_group.rds")
+
 to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), color = "red")+
   geom_line(aes(x=time, y=hi95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "red")+
   geom_line(aes(x=time, y=lo95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "red")+
   geom_line(data=subset(df_condition_meansz, target_final == "1"), aes(x=time_lores/bin_width+1, y=position_bin_grand_avg), alpha = 0.5)+
+  geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition2))+
   ylab('value')+
   xlab('time')
 
@@ -513,5 +524,6 @@ to_plot %>%
   geom_line(aes(x=time, y=hi95_1*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "turquoise")+
   geom_line(aes(x=time, y=lo95_1*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "turquoise")+
   geom_line(data=subset(df_condition_meansz, target_final == "0"), aes(x=time_lores/bin_width+1, y=position_bin_grand_avg), alpha = 0.5)+
+  geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition1))+
   ylab('value')+
   xlab('time')
