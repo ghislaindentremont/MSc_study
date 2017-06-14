@@ -12,18 +12,18 @@ source('~/Documents/Experiments/Trajectory/GP Demos/Mike Demos/gp_example/prep_x
 
 # load a function to do some pre-computation on x
 # load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/data_trim.Rdata")
-df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data1.rds")
-df_long_trim$coordinate = "z"
+df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data2.rds")
+df_long_trim$coordinate = factor("z")
 
 # Look at Data ----
 summary(df_long_trim)
 
 head(df_long_trim)
 
-# # set trial start to zero
-# df_long_trim %>%
-#   group_by(id, trial, coordinate) %>%
-#   dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
+# set trial start to zero
+df_long_trim %>%
+  group_by(id, trial, target_final, coordinate) %>%
+  dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
 
 # it looks like there is a slight sub-grouping within each target condition. Probably explained by the cues which 
 # are ignored here
@@ -180,15 +180,15 @@ x_index = match(df_long_trimz$time_lores,x)
 s = sort(unique(df_long_trimz$id))
 s_index = match(df_long_trimz$id, s)
 
-# compute the model matrix
-z = model.matrix(
-  data = df_long_trimz
-  , object = ~ target_final
-)
-# z = get_contrast_matrix(
-#   df_long_trimz
-#   , ~ target_final
+# # compute the model matrix
+# z = model.matrix(
+#   data = df_long_trimz
+#   , object = ~ target_final
 # )
+z = get_contrast_matrix(
+  df_long_trimz
+  , ~ target_final
+)
 
 # compute the unique entries in the model matrix
 temp = as.data.frame(z)
@@ -238,7 +238,7 @@ data_for_stan = list(
 )
 
 # # package for googleComputeEngine
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_stan_data_11.Rdata")
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_stan_data_05_11.Rdata")
 
 # # # see cluster_analysis
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
@@ -267,7 +267,7 @@ data_for_stan = list(
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake1_post_11.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake2_post_11.rdata")
 
 # how long did it take (in hours)?
 # post_centered_0.5 took 6 hours! But, intercept volatility median estimate is 5.3! Should widen prior:
@@ -277,6 +277,9 @@ load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake
 # post_cauchy20 took a little over 5 hours 
 # post_01 took a little over 8 hours (i.e. it seems to take longer to sample with 01 contrast matrix)
 # post_01_15 took roughly 20 hours 
+
+# simulated data: fake2_post_11 did not even take 1 hour at 1000 iterations, which is almost 10 times faster
+# than its counterpart fake1_post_11, which used 01 contast and did not start every trial at position 0
 sort(rowSums(get_elapsed_time(post)/60/60))
 
 ezStan::stan_summary(
@@ -378,8 +381,8 @@ subj_f_e_sum %>%
 # get GP of conditions
 subj_f_sum = subj_f_I
 subj_f_sum$value2 = subj_f_e$value
-subj_condition1 = subj_f_sum$value 
-subj_condition2 = subj_f_sum$value + subj_f_sum$value2
+subj_condition1 = subj_f_sum$value + subj_f_sum$value2/2
+subj_condition2 = subj_f_sum$value - subj_f_sum$value2/2
 subj_f_sum = cbind(subj_f_sum, data.frame(condition1 = subj_condition1, condition2 = subj_condition2))
 
 subj_to_plot = subj_f_sum %>%
@@ -506,7 +509,14 @@ to_plot = f_sum %>%
   )
 
 # load real population means 
-df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data1_group.rds")
+df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data2_group.rds")
+# set to zero
+df_pop %>%
+  dplyr::mutate(
+    condition1 = condition1 - condition1[time == 0]
+    , condition2 = condition2 - condition2[time == 0]
+  ) -> df_pop
+
 
 to_plot %>%
   ggplot()+

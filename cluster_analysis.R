@@ -1,5 +1,5 @@
 # Upload stan_data ----
-load("fake_stan_data_11.Rdata")
+load("fake_stan_data_05_11.Rdata")
 # load("stan_data.Rdata")
 # load("stan_data_15.Rdata")
 # load("stan_data_21.rdata")
@@ -24,7 +24,7 @@ post = sampling(
   , cores = 16
   , verbose = T
   , refresh = 1
-  , control = list(max_treedepth = 15)
+  , control = list(max_treedepth = 15)  # consider increasing adapt delta
   , include = F
   , pars = c(
   'f_normal01'
@@ -37,6 +37,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'fake1_post_11.rdata'
+  , file = 'fake2_post_11.rdata'
 )
 

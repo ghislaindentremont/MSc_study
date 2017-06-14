@@ -14,9 +14,10 @@ n_x = length(x)
 mu = rep(0, n_x)
 
 # covariance matrix with hyperparameters
-# c(condition1, effect of condition2)
-amplitudes = c(0.81, 1.35)
-volatilities = c(3.22, 3.31)
+# c(intercept, effect)
+# 0.5 contrast matrix 
+amplitudes = c(0.11, 1.35)
+volatilities = c(1.22, 1.31)
 
 Sigmas = list()
 
@@ -42,7 +43,7 @@ fs = list()
 fs_subj = list()
 
 subj_amplitude_sd = c(0.13, 0.23)
-subj_volatility_sd = c(4.91, 4.34)
+subj_volatility_sd = c(2.91, 2.34)
 
 for (param in 1:length(amplitudes)) {
   fs[[param]] = mvrnorm(1, mu, Sigmas[[param]])
@@ -77,12 +78,12 @@ names(df_pop) = c("intercept", "effect")
 df_pop %>%
   mutate(
     time = x
-    , condition1 = intercept
-    , condition2 = intercept + effect
+    , condition1 = intercept + effect/2
+    , condition2 = intercept - effect/2
   ) -> df_pop
 
 # same generative function (f(x))
-saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data1_group.rds")
+saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data2_group.rds")
 
 df_pop %>%
   gather(parameter, value, intercept:effect) %>%
@@ -168,4 +169,4 @@ names(df_noise)[c(1,5)] = c("target_final", "position")
 df_noise$target_final = factor(df_noise$target_final, labels = c("0", "1"))
 
 # Save File ----
-saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data1.rds")
+saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data2.rds")
