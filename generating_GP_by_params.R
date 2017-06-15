@@ -14,10 +14,10 @@ n_x = length(x)
 mu = rep(0, n_x)
 
 # covariance matrix with hyperparameters
-# c(intercept, effect)
+# c(intercept, effect1, effect2, interaction_effect)
 # 0.5 contrast matrix 
-amplitudes = c(0.11, 1.35)
-volatilities = c(1.22, 1.31)
+amplitudes = c(0.11, 1.35, 0.68, 0.20)
+volatilities = c(1.22, 1.31, 0.91, 0.10)
 
 Sigmas = list()
 
@@ -42,8 +42,8 @@ for (param in 2:length(amplitudes)) {
 fs = list()
 fs_subj = list()
 
-subj_amplitude_sd = c(0.13, 0.23)
-subj_volatility_sd = c(2.91, 2.34)
+subj_amplitude_sd = c(0.13, 0.23, 0.30, 0.25)
+subj_volatility_sd = c(2.91, 2.34, 2.51, 2.48)
 
 for (param in 1:length(amplitudes)) {
   fs[[param]] = mvrnorm(1, mu, Sigmas[[param]])
@@ -68,31 +68,47 @@ for (param in 1:length(amplitudes)) {
 }
 
 df = do.call(rbind, fs_subj)
-df$parameter = factor(ifelse(df$parameter == 1, "intercept", "effect"))
+df$parameter = factor(
+  ifelse(
+    df$parameter == 1
+    , "intercept"
+    , ifelse(
+      df$parameter == 2
+      , "effect1"
+      , ifelse(
+        df$parameter == 3
+        , "effect2"
+        , "interaction_effect"
+      )
+    )
+  )
+)
 
 
 # Visualizing and Saving Group f(x)s ----
 df_pop = do.call(cbind, fs)
 df_pop = data.frame(df_pop)
-names(df_pop) = c("intercept", "effect")
+names(df_pop) = c("intercept", "effect1", "effect2", "interaction_effect")
 df_pop %>%
   mutate(
     time = x
-    , condition1 = intercept + effect/2
-    , condition2 = intercept - effect/2
+    , condition1 = intercept + effect1/2 + effect2/2 + interaction_effect/4
+    , condition2 = intercept - effect1/2 + effect2/2 - interaction_effect/4
+    , condition3 = intercept + effect1/2 - effect2/2 - interaction_effect/4
+    , condition4 = intercept - effect1/2 - effect2/2 + interaction_effect/4
   ) -> df_pop
 
 # same generative function (f(x))
-saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data2_group.rds")
+saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data3_group.rds")
 
 df_pop %>%
-  gather(parameter, value, intercept:effect) %>%
+  gather(parameter, value, intercept:interaction_effect) %>%
   ggplot()+
     geom_line(aes(x=time, y=value))+
     facet_grid(parameter~.)
 
 df_pop %>%
-  gather(condition, value, condition1:condition2) %>%
+  gather(condition, value, condition1:condition4) %>%
   ggplot()+
     geom_line(aes(x=time, y=value))+
     facet_grid(condition~.)
@@ -110,10 +126,12 @@ df %>%
 df %>%
   spread(parameter, value) %>%
   mutate(
-    condition1 = intercept
-    , condition2 = intercept + effect
+    condition1 = intercept + effect1/2 + effect2/2 + interaction_effect/4
+    , condition2 = intercept - effect1/2 + effect2/2 - interaction_effect/4
+    , condition3 = intercept + effect1/2 - effect2/2 - interaction_effect/4
+    , condition4 = intercept - effect1/2 - effect2/2 + interaction_effect/4
     ) %>%
-  gather(condition, value, condition1:condition2) -> df_cond
+  gather(condition, value, condition1:condition4) -> df_cond
 
 df_cond %>%
   ggplot()+
@@ -165,8 +183,8 @@ df_id_means %>%
   facet_grid(condition~id)
 
 # change column names etc.
-names(df_noise)[c(1,5)] = c("target_final", "position")
-df_noise$target_final = factor(df_noise$target_final, labels = c("0", "1"))
+names(df_noise)[5] = c("position")
+df_noise$coordinate = factor("z")
 
 # Save File ----
-saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data2.rds")
+saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data3.rds")
