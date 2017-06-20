@@ -11,7 +11,7 @@ df = map_df(
   .x = list.files(
     pattern = ".csv"
     , recursive = T
-    , path = "/Volumes/LACIE SHARE/Jenn Study/Jenn CPU/Raw Data" #/#013
+    , path = "/Volumes/LACIE SHARE/Jenn Study/Jenn CPU/Data" #/#013
     , full.names = T
     )
   , .f = function(file) {
@@ -129,50 +129,6 @@ df_long$target_fixed = factor(df_long$target_fixed)
 # *8 and 12 may lose a few trials
 # *18 looks wonky
 
-
-# # CODE USED TO WORK THROUGH TARGET_FIXED
-# df_long %>%
-#   dplyr::filter(coordinate == "z", id == "004") %>%
-#   ggplot()+
-#   geom_point(aes(x=frame, y=position), alpha = 0.2, size = .5)+
-#   xlab("time")+
-#   ylab("position (z)")+
-#   facet_grid(.~target_fixed)+
-#   theme(legend.position = "none")
-
-# df_long %>%
-#   spread(frame, position) %>%
-#   group_by(id, coordinate) %>%
-#   dplyr::mutate(
-#     target_lead = ifelse(
-#       id %in% c("002", "003", "004", "007", "008", "009", "012", "016", "017", "018", "019")
-#       , as.character(dplyr::lead(target, 12))
-#       , as.character(target)
-#     )
-#   ) %>%
-#   gather(frame, position, 1:800) -> df_long
-# df_long$target_lead = factor(df_long$target_lead)
-
-# # compare fixed vs.original target assignments
-# compare_mappings = ddply(
-#   .data = df_long
-#   , .variables = c("id", "coordinate", "trial")
-#   , .fun = function(df_piece){
-#     target = unique(df_piece$target)
-#     target_fixed = unique(df_piece$target_fixed)
-#     target_lead = unique(df_piece$target_lead)
-#     target_lead = target_lead[!is.na(target_lead)]
-#     df = data.frame(
-#       target = target
-#       , target_fixed = target_fixed
-#       , target_lead = target_lead
-#       )
-#     return(df)
-#   }
-# )
-# compare_mappings %>%
-#   dplyr::filter(coordinate == "z") -> compare_mappings
-
 df_long %>%
   dplyr::filter(id != "002", id != "018") %>%  # get rid of 2 and 18
   dplyr::mutate(
@@ -184,9 +140,7 @@ df_long %>%
   ) -> df_long
 df_long$target_final = factor(df_long$target_final)
 
-# how well do the target_fixed match with target?
-# basically, the ones that matched from the start score > 95% 
-# whereas the others score ~50% which is chance
+# how well do diferent target labels match up? 
 df_long %>%
   group_by(id, coordinate) %>%
   dplyr::summarise(
@@ -200,6 +154,7 @@ df_long %>%
     , prop_final_fixed = unique(prop_final_fixed)
     , prop_fixed_target = unique(prop_fixed_target)
   )
+# P17 is the only one for which original mappings don't match up with inferred (fixed) ones!
 
 
 # Raw Data ----
@@ -220,7 +175,7 @@ df_long %>%
     ylab("position (x)")+
     geom_hline(yintercept = 250, color = "red")+  # high cut-off, applicable across participants
     geom_hline(yintercept = 75, color = "red")+  # low cut-off, applicable across participants
-    facet_grid(.~target_final)
+    facet_grid(.~target)
 
 # Y
 df_long %>%
@@ -230,7 +185,7 @@ df_long %>%
   xlab("time")+
   ylab("position (y)")+
   geom_hline(yintercept = -20, color = "red")+  # low cut-off, applicable across participants
-  facet_grid(.~target_final)
+  facet_grid(.~target)
 
 # Z
 df_long %>%
@@ -239,28 +194,31 @@ df_long %>%
   geom_point(aes(x=frame, y=position), alpha = 0.2, size = .5)+
   xlab("time")+
   ylab("position (z)")+
-  geom_hline(data = data.frame(Z=-2350, target_final=factor("0")), aes(yintercept = Z), color = "red")+
-  geom_hline(data = data.frame(Z=-2600, target_final=factor("0")), aes(yintercept = Z), color = "red")+
-  geom_hline(data = data.frame(Z=-2250, target_final=factor("1")), aes(yintercept = Z), color = "red")+
-  geom_hline(data = data.frame(Z=-2500, target_final=factor("1")), aes(yintercept = Z), color = "red")+
-  facet_grid(.~target_final)
+  geom_hline(data = data.frame(Z=-2350, target=factor("0")), aes(yintercept = Z), color = "red")+
+  geom_hline(data = data.frame(Z=-2600, target=factor("0")), aes(yintercept = Z), color = "red")+
+  geom_hline(data = data.frame(Z=-2250, target=factor("1")), aes(yintercept = Z), color = "red")+
+  geom_hline(data = data.frame(Z=-2500, target=factor("1")), aes(yintercept = Z), color = "red")+
+  facet_grid(.~target)
 
 
 # Exclusion ----
 # identify trials that exceed thresholds
 df_long %>%
-  dplyr::select(id, coordinate, trial, frame, position, target_final) %>%
+  dplyr::select(id, coordinate, trial, frame, position, target) %>%
   spread(coordinate, position) %>%
   dplyr::filter(
     y < -20 | x > 250 | x < 75
-    | (target_final == "0" & ((z> -2350) | (z < -2600)))
-    | (target_final == "1" & ((z > -2250) | (z < -2500)))
+    | (target == "0" & ((z> -2350) | (z < -2600)))
+    | (target == "1" & ((z > -2250) | (z < -2500)))
   ) %>%
   group_by(id, trial) %>%
   dplyr::summarise(dummy = mean(x)) -> df_exclude
 
 # look at which trials are excluded, for each participant
 aggregate(trial ~ id, data = df_exclude, FUN = length)
+
+# # need to get rid of 17 on basis of original trial mappings 
+# df_long %>% dplyr::filter(id != "017") -> df_long
 
 ptm = proc.time()
 df_long_clean = ddply(
@@ -296,7 +254,7 @@ df_long_clean %>%
   ggtitle("clean")+
   geom_hline(yintercept = 250, color = "red")+  # high cut-off, applicable across participants
   geom_hline(yintercept = 75, color = "red")+  # low cut-off, applicable across participants
-  facet_grid(.~target_final)
+  facet_grid(.~target)
 
 # Y
 df_long_clean %>%
@@ -307,7 +265,7 @@ df_long_clean %>%
   ylab("position (y)")+
   ggtitle("clean")+
   geom_hline(yintercept = -20, color = "red")+  # low cut-off, applicable across participants
-  facet_grid(.~target_final)
+  facet_grid(.~target)
 
 # Z
 df_long_clean %>%
@@ -317,13 +275,12 @@ df_long_clean %>%
   xlab("time")+
   ylab("position (z)")+
   ggtitle("clean")+
-  geom_hline(data = data.frame(Z=-2350, target_final=factor("0")), aes(yintercept = Z), color = "red")+
-  geom_hline(data = data.frame(Z=-2600, target_final=factor("0")), aes(yintercept = Z), color = "red")+
-  geom_hline(data = data.frame(Z=-2250, target_final=factor("1")), aes(yintercept = Z), color = "red")+
-  geom_hline(data = data.frame(Z=-2500, target_final=factor("1")), aes(yintercept = Z), color = "red")+
-  facet_grid(.~target_final)
+  geom_hline(data = data.frame(Z=-2350, target=factor("0")), aes(yintercept = Z), color = "red")+
+  geom_hline(data = data.frame(Z=-2600, target=factor("0")), aes(yintercept = Z), color = "red")+
+  geom_hline(data = data.frame(Z=-2250, target=factor("1")), aes(yintercept = Z), color = "red")+
+  geom_hline(data = data.frame(Z=-2500, target=factor("1")), aes(yintercept = Z), color = "red")+
+  facet_grid(.~target)
 
-# SAVE WORKSPACE
 
 # Derivatives ----
 # unfortunately this grouping does not work, so the first frame is not always 0
@@ -371,7 +328,7 @@ df_long_clean$trial_start_frame = df_long_clean$trial_start_bool * df_long_clean
 # select some columns to make things faster
 df_long_clean %>%
   dplyr::select(
-    -c(soa, hi_95, lo_95, block, target, target_fixed, velocity, non_stationary, potential_start, trial_start_bool)
+    -c(soa, hi_95, lo_95, block, target_final, target_fixed, velocity, non_stationary, potential_start, trial_start_bool)
     ) -> df_long_clean
 
 # give some space 
@@ -406,7 +363,7 @@ df_long_trim %>%
 trial_end = 100
 # look at velocities first
 df_long_trim %>%
-  dplyr::filter(coordinate == "z", as.numeric(id) < 10) %>%  # the coordinate is arbitrary. 
+  dplyr::filter(coordinate == "z", as.numeric(id) < 8) %>%  # the coordinate is arbitrary. 
   # The absolute velocity is the same across all three coordinates
   ggplot()+
   geom_line(aes(x=time, y=abs_velo, color = trial), alpha = 0.2)+
@@ -414,10 +371,10 @@ df_long_trim %>%
   ylab("absolute velocity")+
   ylim(c(0, 10))+
   geom_vline(xintercept = trial_end)+
-  facet_grid(id~target_final)+
+  facet_grid(id~target)+
   theme(legend.position = "none")
 df_long_trim %>%
-  dplyr::filter(coordinate == "z", as.numeric(id) >= 10) %>%  # the coordinate is arbitrary. 
+  dplyr::filter(coordinate == "z", as.numeric(id) >= 8) %>%  # the coordinate is arbitrary. 
   # The absolute velocity is the same across all three coordinates
   ggplot()+
   geom_line(aes(x=time, y=abs_velo, color = trial), alpha = 0.2)+
@@ -425,13 +382,13 @@ df_long_trim %>%
   ylab("absolute velocity")+
   ylim(c(0, 10))+
   geom_vline(xintercept = trial_end)+
-  facet_grid(id~target_final)+
+  facet_grid(id~target)+
   theme(legend.position = "none")
 
 # averages
 df_long_trim %>%
   dplyr::filter(coordinate == "z") %>%
-  group_by(id, target_final, time) %>%
+  group_by(id, target, time) %>%
   dplyr::summarise(
     abs_velo_avg = mean(abs_velo)
   ) -> df_velo_avg
@@ -442,11 +399,12 @@ df_velo_avg %>%
   xlab("time")+
   ylab("absolute velocity")+
   ylim(c(0,10))+
-  facet_grid(.~target_final)
+  geom_vline(xintercept = trial_end)+
+  facet_grid(.~target)
 
 # again averages
 df_velo_avg %>%
-  group_by(target_final, time) %>%
+  group_by(target, time) %>%
   dplyr::summarise(
     abs_velo_grand_avg = mean(abs_velo_avg)
   ) -> df_velo_grand_avg
@@ -456,66 +414,70 @@ df_velo_grand_avg %>%
   geom_line(aes(x=time, y=abs_velo_grand_avg))+
   xlab("time")+
   ylab("absolute velocity")+
-  facet_grid(.~target_final)
+  geom_vline(xintercept = trial_end, color = "red")+
+  facet_grid(.~target)
 
 
 # do the trajectories line up?
 df_long_trim %>%
-  dplyr::filter(coordinate == "x", as.numeric(id) < 10) %>%
+  dplyr::filter(coordinate == "x", as.numeric(id) < 8) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (x)")+
   geom_vline(xintercept = trial_end)+
-  facet_grid(id~target_final)+
+  facet_grid(id~target)+
   theme(legend.position = "none")
 df_long_trim %>%
-  dplyr::filter(coordinate == "x", as.numeric(id) >= 10) %>%
+  dplyr::filter(coordinate == "x", as.numeric(id) >= 8) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (x)")+
   geom_vline(xintercept = trial_end)+
-  facet_grid(id~target_final)+
+  facet_grid(id~target)+
   theme(legend.position = "none")
 
 df_long_trim %>%
-  dplyr::filter(coordinate == "y", as.numeric(id) < 10) %>%
+  dplyr::filter(coordinate == "y", as.numeric(id) < 8) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (y)")+
   geom_vline(xintercept = trial_end)+
-  facet_grid(id~target_final)+
+  facet_grid(id~target)+
   theme(legend.position = "none")
 df_long_trim %>%
-  dplyr::filter(coordinate == "y", as.numeric(id) >= 10) %>%
+  dplyr::filter(coordinate == "y", as.numeric(id) >= 8) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (y)")+
   geom_vline(xintercept = trial_end)+
-  facet_grid(id~target_final)+
+  facet_grid(id~target)+
   theme(legend.position = "none")
 
 df_long_trim %>%
-  dplyr::filter(coordinate == "z", as.numeric(id) < 10) %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) < 8) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (z)")+
   geom_vline(xintercept = trial_end)+
-  facet_grid(id~target_final)+
+  facet_grid(id~target)+
   theme(legend.position = "none")
 df_long_trim %>%
-  dplyr::filter(coordinate == "z", as.numeric(id) >= 10) %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) >= 8) %>%
   ggplot()+
   geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
   xlab("time")+
   ylab("position (z)")+
   geom_vline(xintercept = trial_end)+
-  facet_grid(id~target_final)+
+  facet_grid(id~target)+
   theme(legend.position = "none")
+
+# NOTE: a few number of trials obviously don't have the right target mapping! 
+# Since we are concerned with the proper cue mappings it may be best just to remove those trials
 
 
 # Trial End ----
@@ -527,7 +489,7 @@ df_long_trim %>%
 
 # Averages ----
 df_long_trim %>%
-  group_by(id, coordinate, target_final, time) %>%
+  group_by(id, coordinate, cue, target, time) %>%
   dplyr::summarise(
     position_avg = mean(position)
   ) -> df_long_trim_avg
@@ -538,7 +500,7 @@ df_long_trim_avg %>%
   geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
   xlab("time")+
   ylab("position (x)")+
-  facet_grid(.~target_final)
+  facet_grid(cue~target)
 
 df_long_trim_avg %>%
   dplyr::filter(coordinate == "y") %>%
@@ -546,7 +508,7 @@ df_long_trim_avg %>%
   geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
   xlab("time")+
   ylab("position (y)")+
-  facet_grid(.~target_final)
+  facet_grid(cue~target)
 
 df_long_trim_avg %>%
   dplyr::filter(coordinate == "z") %>%
@@ -554,11 +516,11 @@ df_long_trim_avg %>%
   geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
   xlab("time")+
   ylab("position (z)")+
-  facet_grid(.~target_final)
+  facet_grid(cue~target)
 
 # take averages over participants
 df_long_trim_avg %>%
-  group_by(coordinate, target_final, time) %>%
+  group_by(coordinate, cue, target, time) %>%
   dplyr::summarise(
     position_grand_avg = mean(position_avg)
   ) -> df_long_trim_grand_avg
@@ -566,30 +528,30 @@ df_long_trim_avg %>%
 df_long_trim_grand_avg %>%
   dplyr::filter(coordinate == "x") %>%
   ggplot()+
-  geom_line(aes(x=time, y=position_grand_avg))+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
   xlab("time")+
   ylab("position (x)")+
-  facet_grid(.~target_final)
+  facet_grid(.~target)
 
 df_long_trim_grand_avg %>%
   dplyr::filter(coordinate == "y") %>%
   ggplot()+
-  geom_line(aes(x=time, y=position_grand_avg))+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
   xlab("time")+
   ylab("position (y)")+
-  facet_grid(.~target_final)
+  facet_grid(.~target)
 
 df_long_trim_grand_avg %>%
   dplyr::filter(coordinate == "z") %>%
   ggplot()+
-  geom_line(aes(x=time, y=position_grand_avg))+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
   xlab("time")+
   ylab("position (z)")+
-  facet_grid(.~target_final)
+  facet_grid(.~target)
 
 
-# # Save Data ----
-# save(df_long_trim, file = "data_trim.RData")
+# Save Data ----
+save(df_long_trim, file = "data_trim_matched.RData")
   
 
 # # Normalize ----
