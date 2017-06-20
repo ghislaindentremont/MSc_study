@@ -18,7 +18,7 @@ mod = rstan::stan_model("gp_regression.stan")
 post = sampling(
  mod
   , data = data_for_stan
-  , iter = 1000
+  , iter = 3000
   , init = 0
   , chains = 16
   , cores = 16
@@ -26,7 +26,7 @@ post = sampling(
   , refresh = 1
   , control = list(
     max_treedepth = 15
-    , adapt_delta = 0.95  # consider reaising to .99
+    , adapt_delta = 0.99  
   )  
   , include = F
   , pars = c(
@@ -40,6 +40,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'fake3_post.rdata'
+  , file = 'fake3_post_3000.rdata'
 )
 
