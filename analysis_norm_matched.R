@@ -2,7 +2,7 @@ library(R.matlab)
 library(tidyverse)
 library(plyr)
 
-setwd("~/Documents/Experiments/Trajectory/Jenn Study")
+setwd("~/Documents/Experiments/Trajectory/Jenn Study/Workspaces")
 
 # Read Data ----
 df = map_df(
@@ -131,8 +131,8 @@ df_norm %>%
 
 # NOTE: there are some substantial outliers
 
-# the target mappings for participants 12, 16, and 17 are no good
-df_norm %>% dplyr::filter(id != "012", id != "016", id != "017") -> df_norm
+# # the target mappings for participants 12, 16, and 17 are no good
+# df_norm %>% dplyr::filter(id != "012", id != "016", id != "017") -> df_norm
 
 
 # Averages ----
@@ -204,3 +204,184 @@ df_norm_grand_avg %>%
 save(df_norm, file = "data_norm_matched.RData")
 
 
+
+
+#### Comparison with my Methods ####
+setwd("~/Documents/Experiments/Trajectory/Jenn Study/Workspaces")
+# load("data_norm_matched.RData")
+load("data_trim_matched.RData")
+
+# set trial start to zero
+df_long_trim %>%
+  group_by(id, trial, coordinate) %>%
+  dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
+
+
+# By ID and Trial ----
+df_long_trim %>%
+  dplyr::filter(coordinate == "x", as.numeric(id) < 8) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (x)")+
+  facet_grid(id~target)+
+  theme(legend.position = "none")
+df_long_trim %>%
+  dplyr::filter(coordinate == "x", as.numeric(id) >= 8) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (x)")+
+  facet_grid(id~target)+
+  theme(legend.position = "none")
+
+df_long_trim %>%
+  dplyr::filter(coordinate == "y", as.numeric(id) < 8) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (y)")+
+  facet_grid(id~target)+
+  theme(legend.position = "none")
+df_long_trim %>%
+  dplyr::filter(coordinate == "y", as.numeric(id) >= 8) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (y)")+
+  facet_grid(id~target)+
+  theme(legend.position = "none")
+
+df_long_trim %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) < 8) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (z)")+
+  facet_grid(id~target)+
+  theme(legend.position = "none")
+df_long_trim %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) >= 8) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial), alpha = 0.2)+
+  xlab("time")+
+  ylab("position (z)")+
+  facet_grid(id~target)+
+  theme(legend.position = "none")
+
+
+# Averages ----
+df_long_trim %>%
+  group_by(id, coordinate, cue, target, time) %>%
+  dplyr::summarise(
+    position_avg = mean(position)
+  ) -> df_long_trim_avg
+
+df_long_trim_avg %>%
+  dplyr::filter(coordinate == "x") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
+  xlab("time")+
+  ylab("position (x)")+
+  facet_grid(cue~target)
+
+df_long_trim_avg %>%
+  dplyr::filter(coordinate == "y") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
+  xlab("time")+
+  ylab("position (y)")+
+  facet_grid(cue~target)
+
+df_long_trim_avg %>%
+  dplyr::filter(coordinate == "z") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
+  xlab("time")+
+  ylab("position (z)")+
+  facet_grid(cue~target)
+
+# take averages over participants
+df_long_trim_avg %>%
+  group_by(coordinate, cue, target, time) %>%
+  dplyr::summarise(
+    position_grand_avg = mean(position_avg)
+  ) -> df_long_trim_grand_avg
+
+df_long_trim_grand_avg %>%
+  dplyr::filter(coordinate == "x") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (x)")+
+  facet_grid(.~target)
+
+df_long_trim_grand_avg %>%
+  dplyr::filter(coordinate == "y") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (y)")+
+  facet_grid(.~target)
+
+df_long_trim_grand_avg %>%
+  dplyr::filter(coordinate == "z") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (z)")+
+  facet_grid(.~target)
+
+
+# Compare Trial and ID Counts ----
+# ids
+unique(df_long_trim$id)
+length(unique(df_long_trim$id))
+# -- 
+unique(df_norm$id)
+length(unique(df_norm$id))
+
+# trials
+df_long_trim %>%
+  dplyr::filter(coordinate == "z") %>%  # arbitrary
+  group_by(id) %>%
+  dplyr::summarise(num_trials = length(unique(trial))) %>%
+  dplyr::summarise(avg_trials_per_id = mean(num_trials))
+# --
+df_norm %>%
+  dplyr::filter(coordinate == "z") %>%  # arbitrary
+  group_by(id) %>%
+  dplyr::summarise(num_trials = length(unique(trial))) %>%
+  dplyr::summarise(avg_trials_per_id = mean(num_trials))
+
+# take averages over participants WITHOUT outliers
+df_norm_avg %>%
+  dplyr::filter(id != "017", id != "018") %>%
+  group_by(coordinate, cue, target, time) %>%
+  dplyr::summarise(
+    position_grand_avg = mean(position_avg)
+  ) -> ndf_norm_grand_avg
+
+ndf_norm_grand_avg %>%
+  dplyr::filter(coordinate == "x") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (x)")+
+  facet_grid(.~target)
+
+ndf_norm_grand_avg %>%
+  dplyr::filter(coordinate == "y") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (y)")+
+  facet_grid(.~target)
+
+ndf_norm_grand_avg %>%
+  dplyr::filter(coordinate == "z") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (z)")+
+  facet_grid(.~target)

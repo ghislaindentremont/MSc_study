@@ -249,8 +249,8 @@ data_for_stan = list(
   , subj_obs = subj_obs
 )
 
-# package for googleComputeEngine
-save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_stan_data3.Rdata")
+# # package for googleComputeEngine
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_stan_data3.Rdata")
 
 # # # see cluster_analysis
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
@@ -279,13 +279,16 @@ save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Traj
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake3_post.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake3_post_3000.rdata")
 
 # how long did it take (in hours)?
 # fake2_post_11 did not even take 1 hour at 1000 iterations, which is almost 10 times faster
 # than its counterpart fake1_post_11, which used 01 contast and did not start every trial at position 0
-# fake3_post took 4-5 hours. The addition  in this case was 2 conditions, and therefore 2 parameters to estimate
+# fake3_post took 4-5 hours. In additionin this case was 2 conditions, and therefore 2 parameters to estimate
 # also, adapt_delta was moved from 0.8 (default) to 0.95
+# fake3_post_3000 took a little over one whole day There were 3000 iterations per chain
+# adapt_delta was raised to 0.99 and succesfully decreased the number of transitions. It does not seem like the time increase
+# was worth the increased efficiency
 sort(rowSums(get_elapsed_time(post)/60/60))
 
 # fake3: amplitudes were captured, but not all volatilities were captured by 95% CIs
