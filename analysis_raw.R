@@ -11,7 +11,7 @@ df = map_df(
   .x = list.files(
     pattern = ".csv"
     , recursive = T
-    , path = "/Volumes/LACIE SHARE/Jenn Study/Raw Data" #/#013
+    , path = "/Volumes/LACIE SHARE/Jenn Study/Jenn CPU/Raw Data" #/#013
     , full.names = T
     )
   , .f = function(file) {
