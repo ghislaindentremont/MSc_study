@@ -55,13 +55,39 @@ data {
 }
 
 parameters {
+	
+	// NOISE
+	// # subj_noise: noise per subject
+	// vector[n_subj] subj_noise ;
+	// 
+	// # subj_noise_sd: sd of subj_noise values
+	// real<lower=0> subj_noise_sd ;
+	# volatility_helper: helper for cauchy-distributed volatility (see transformed parameters)
+	vector<lower=0,upper=pi()/2>[n_z] noise_volatility_helper ;
 
-	# subj_noise: noise per subject
-	vector[n_subj] subj_noise ;
+	# subj_volatility_helper: helper for cauchy-distributed volitilities per subject (see transformed parameters)
+	vector<lower=0,upper=pi()/2>[n_subj] noise_subj_volatility_helper[n_z] ;
 
-	# subj_noise_sd: sd of subj_noise values
-	real<lower=0> subj_noise_sd ;
+	# subj_volatility_sd: sd of subject volitilities
+	vector<lower=0>[n_z] noise_subj_volatility_sd ;
 
+	# amplitude: amplitude of population GPs
+	vector<lower=0>[n_z] noise_amplitude ;
+
+	# subj_amplitude: amplitude of per-subject GPs
+	vector<lower=0>[n_subj] noise_subj_amplitude[n_z] ;
+
+	# subj_amplitude_sd: sd of subj_amplitude
+	vector<lower=0>[n_z] noise_subj_amplitude_sd ;
+
+	# f_normal01: helper variable for GPs (see transformed parameters)
+	matrix[n_x, n_z] noise_f_normal01 ;
+
+	# f_normal01: helper variable for per-subject GPs (see transformed parameters)
+	matrix[n_x, n_z] noise_subj_f_normal01[n_subj] ;
+	
+	
+  // DISPLACEMENT
 	# volatility_helper: helper for cauchy-distributed volatility (see transformed parameters)
 	vector<lower=0,upper=pi()/2>[n_z] volatility_helper ;
 
@@ -90,6 +116,21 @@ parameters {
 
 transformed parameters{
 
+  // NOISE
+  # volatility: volatility of population GPs
+	vector[n_z] noise_volatility ;
+
+	# volatility: volatility of per-subject GPs
+	vector[n_subj] noise_subj_volatility[n_z] ;
+
+	# f: Population GPs
+	matrix[n_x,n_z] noise_f ;
+
+	# subj_f: per-subject GPs
+	matrix[n_x,n_z] noise_subj_f[n_subj] ;
+	
+	
+	// DISPLACEMENT
 	# volatility: volatility of population GPs
 	vector[n_z] volatility ;
 
@@ -101,9 +142,42 @@ transformed parameters{
 
 	# subj_f: per-subject GPs
 	matrix[n_x,n_z] subj_f[n_subj] ;
+	
 
 	#next line implies volatility ~ cauchy(0,10)
 	volatility = 10*tan(volatility_helper) ;
+
+	#next line implies volatility ~ cauchy(0,10)
+	noise_volatility = 10*tan(noise_volatility_helper) ;
+
+	# loop over predictors, computing population GP and per-subject GPs
+	for(zi in 1:n_z){
+
+		# next line implies subj_volatility ~ cauchy(0,subj_volatility_sd)
+		noise_subj_volatility[zi] = noise_subj_volatility_sd[zi] * tan(noise_subj_volatility_helper[zi]) ;
+
+		# population GP
+		noise_f[,zi] = GP(
+			  noise_volatility[zi]
+			, noise_amplitude[zi]
+			, noise_f_normal01[,zi]
+			, n_x , x
+		) ;
+
+		# loop over subjects, computing per-subject GPs
+		for(si in 1:n_subj){
+
+			# per-subject GP
+			noise_subj_f[si, ,zi] = noise_f[,zi] +
+				GP(
+					noise_subj_volatility[zi,si]
+					, noise_subj_amplitude[zi,si]
+					, noise_subj_f_normal01[si,,zi]
+					, n_x , x
+				) ;
+
+		}
+	}
 
 	# loop over predictors, computing population GP and per-subject GPs
 	for(zi in 1:n_z){
@@ -138,50 +212,58 @@ transformed parameters{
 
 model {
 
-	# noise priors
-	subj_noise_sd ~ weibull(2,1) ; #peaked at .8ish
-	subj_noise ~ normal(0,subj_noise_sd) ;  #peaked at 0
+	// # noise priors
+	// subj_noise_sd ~ weibull(2,1) ; #peaked at .8ish
+	// subj_noise ~ normal(0,subj_noise_sd) ;  #peaked at 0
 
 	# volatility priors:
 	# - population GPs have volatility ~ cauchy(0,10)
 	# - per-subject GPs have subj_volatility ~ cauchy(0,subj_volatility_sd)
 	# - subj_volatility pooled via subj_volatility_sd
+	noise_subj_volatility_sd ~ weibull(2,10) ; #peaked around 8
 	subj_volatility_sd ~ weibull(2,10) ; #peaked around 8
 
 	# amplitude priors
 	# - population GPs have amplitude as weibull peaked at .8
 	# - per-subject GPs have amplitude as normal peaked at zero with pooled sd
+	noise_amplitude ~ weibull(2,1) ; #peaked at .8ish
 	amplitude ~ weibull(2,1) ; #peaked at .8ish
+	noise_subj_amplitude_sd ~ weibull(2,1) ;#peaked at .8ish
 	subj_amplitude_sd ~ weibull(2,1) ;#peaked at .8ish
 	for(zi in 1:n_z){
 		subj_amplitude[zi] ~ normal(0,subj_amplitude_sd[zi]) ; #peaked at 0
+		noise_subj_amplitude[zi] ~ normal(0,noise_subj_amplitude_sd[zi]) ; #peaked at 0
 	}
 
 	# normal(0,1) priors on GP helpers
 	to_vector(f_normal01) ~ normal(0,1);
+	to_vector(noise_f_normal01) ~ normal(0,1);
 	for(si in 1:n_subj){
 		to_vector(subj_f_normal01[si]) ~ normal(0,1) ;
+		to_vector(noise_subj_f_normal01[si]) ~ normal(0,1) ;
 	}
   
   # loop over observations
 	{
 		# subj_noise_exp: exponentiated subj_noise
-		vector[n_subj] subj_noise_exp ;
+		// vector[n_subj] subj_noise_exp ;
 		matrix[rows_z_unique,n_x] z_by_f[n_subj] ;
+		matrix[rows_z_unique,n_x] noise_z_by_f[n_subj] ;
 		
-		subj_noise_exp = exp(subj_noise) ;
+		// subj_noise_exp = exp(subj_noise) ;
 
 		for(i in 1:rows_z_unique){
 			for(j in 1:n_x){
 			  for(k in 1:n_subj){
 				z_by_f[k,i,j] = sum(z_unique[i].*subj_f[k,j,]) ;
+				noise_z_by_f[k,i,j] = sum(z_unique[i].*noise_subj_f[k,j,]) ;
 			  }
 			}
 		}
 		for(si in 1:n_subj) {
   		y[si,1:subj_obs[si]] ~ normal(
   			  to_vector(z_by_f[si])[z_by_f_by_s_pad[si,1:subj_obs[si]]]
-  			, subj_noise_exp[si]
+  			, exp(to_vector(noise_z_by_f[si])[z_by_f_by_s_pad[si,1:subj_obs[si]]])
   		);
 		}
 	}

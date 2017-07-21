@@ -12,7 +12,7 @@ source('~/Documents/Experiments/Trajectory/GP Demos/Mike Demos/gp_example/prep_x
 
 # load a function to do some pre-computation on x
 # load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/data_trim.Rdata")
-df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data3.rds")
+df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_noise1.rds")
 
 # Look at Data ----
 summary(df_long_trim)
@@ -179,28 +179,11 @@ x_index = match(df_long_trimz$time_lores,x)
 s = sort(unique(df_long_trimz$id))
 s_index = match(df_long_trimz$id, s)
 
-# # compute the model matrix
-# z = model.matrix(
-#   data = df_long_trimz
-#   , object = ~ condition
-# )
-
-# need to create new columns for fake data before making contrast matrix
-df_long_trimz$A = ifelse(
-  (df_long_trimz$condition == "condition1"|df_long_trimz$condition == "condition3")
-  , "a1"
-  , "a2"
-)
-df_long_trimz$B = ifelse(
-  (df_long_trimz$condition == "condition1"|df_long_trimz$condition == "condition2")
-  , "b1"
-  , "b2"
-)
-
-z = get_contrast_matrix(
-  df_long_trimz
-  , ~ A * B
-)
+# compute the model matrix
+z = data.frame(
+  condition1 = ifelse(df_long_trimz$condition == "condition1", 1, 0)
+  , condition2 =ifelse(df_long_trimz$condition == "condition2", 1, 0)
+  )
 
 # compute the unique entries in the model matrix
 temp = as.data.frame(z)
@@ -221,7 +204,7 @@ for (si in 1:length(z_by_f_by_s)) {
   subj_obs = c(subj_obs, length(z_by_f_by_s[[si]]))
 }
 
-z_by_f_by_s_pad = array(0,dim=c(16,10000))
+z_by_f_by_s_pad = array(0,dim=c(20,10000))
 for (si in 1:length(subj_obs)) {
   z_by_f_by_s_pad[si,] = c(z_by_f_by_s[[si]], rep(0, 10000 - subj_obs[si]))
 }
@@ -229,7 +212,7 @@ for (si in 1:length(subj_obs)) {
 y = scale(df_long_trimz$position_bin)[,1]  # scaled to mean=0,sd=1
 y_by_s = array(split(y, s_index))
 
-y_by_s_pad = array(0,dim=c(16,10000))
+y_by_s_pad = array(0,dim=c(20,10000))
 for (si in 1:length(subj_obs)) {
   y_by_s_pad[si,] = c(y_by_s[[si]], rep(0, 10000 - subj_obs[si]))
 }
@@ -249,8 +232,8 @@ data_for_stan = list(
   , subj_obs = subj_obs
 )
 
-# package for googleComputeEngine
-save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_stan_data3.Rdata")
+# # package for googleComputeEngine
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_stan_data_proposal.Rdata")
 
 # # # see cluster_analysis
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
@@ -262,7 +245,10 @@ save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Traj
 #   , chains = 2
 #   , cores = 2
 #   , verbose = T
-#   , control = list(max_treedepth = 15)
+#   , control = list(
+#     max_treedepth = 15
+#     , adapt_delta = 0.99 
+#     )
 #   , refresh = 1
 #   , include = F
 #   , pars = c(
@@ -270,40 +256,40 @@ save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Traj
 #     , 'subj_f_normal01'
 #     , 'volatility_helper'
 #     , 'subj_volatility_helper'
+#     , 'noise_f_normal01'
+#     , 'noise_subj_f_normal01'
+#     , 'noise_volatility_helper'
+#     , 'noise_subj_volatility_helper'
 #   )
 # )
-# post = post_test
-# save(post, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/post_test.rdata")
-
 
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake3_post.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_proposal_post_test.rdata")
 
 # how long did it take (in hours)?
-# fake2_post_11 did not even take 1 hour at 1000 iterations, which is almost 10 times faster
-# than its counterpart fake1_post_11, which used 01 contast and did not start every trial at position 0
-# fake3_post took 4-5 hours. The addition  in this case was 2 conditions, and therefore 2 parameters to estimate
-# also, adapt_delta was moved from 0.8 (default) to 0.95
 sort(rowSums(get_elapsed_time(post)/60/60))
 
-# fake3: amplitudes were captured, but not all volatilities were captured by 95% CIs
 ezStan::stan_summary(
   from_stan = post
-  , par = c('volatility','amplitude', 'subj_noise_sd', 'subj_noise' )
+  , par = c('volatility','amplitude', 'noise_volatility', 'noise_amplitude')
 )
 
-# fake3: in this case the volatilities get captured, not all the amplitudes
 ezStan::stan_summary(
   from_stan = post
-  , par = c('subj_volatility_sd','subj_amplitude_sd')
+  , par = c('subj_volatility_sd','subj_amplitude_sd', 'noise_subj_volatility_sd','noise_subj_amplitude_sd')
 )
 
-# the intercept samples well with 
+# condition samples 
 ezStan::stan_summary(
   from_stan = post
   , par = c('f')
+)
+
+ezStan::stan_summary(
+  from_stan = post
+  , par = c('noise_f')
 )
 
 # look at subject-by-subject estimates
@@ -312,28 +298,39 @@ ezStan::stan_summary(
   , par = c('subj_f')
 )
 
-# visualize subject GPs
+ezStan::stan_summary(
+  from_stan = post
+  , par = c('noise_subj_f')
+)
+
+
+
+###################################################################
+####                 Subject Level                             ####
+###################################################################
+
+# Position ----
 subj_f = rstan::extract(
   post
   , pars = 'subj_f'
 )[[1]]
 
 # intercept
-subj_intercept = NULL
+subj_condition1 = NULL
 for (si in 1:dim(subj_f)[2]) {
   temp = data.frame(subj_f[,si,,1])
   temp$id = si
   temp$sample = 1:nrow(temp)
-  subj_intercept = rbind(subj_intercept, temp)
+  subj_condition1 = rbind(subj_condition1, temp)
 }
 
-subj_f_I = subj_intercept %>%
+subj_f_1 = subj_condition1 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
     time= as.numeric(gsub('X','',time))
-    , parameter = 1
+    , condition = 1
   )
-subj_f_I_sum = subj_f_I %>%
+subj_f_1_sum = subj_f_1 %>%
   dplyr::group_by(
     time
     , id
@@ -345,29 +342,29 @@ subj_f_I_sum = subj_f_I %>%
     , lo50 = quantile(value,.25)
     , hi50 = quantile(value,.75)
   )
-subj_f_I_sum %>%
+subj_f_1_sum %>%
   ggplot()+
   geom_line(aes(x=time, y=med, color=factor(id)))+
   geom_line(aes(x=time, y=hi95, color=factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95, color=factor(id)), linetype = "dashed")+
-  ggtitle("intercepts")
+  ggtitle("condition1")
 
-# effect 1
-subj_effect1 = NULL
+# condition2
+subj_condition2 = NULL
 for (si in 1:dim(subj_f)[2]) {
   temp = data.frame(subj_f[,si,,2])
   temp$id = si
   temp$sample = 1:nrow(temp)
-  subj_effect1 = rbind(subj_effect1, temp)
+  subj_condition2 = rbind(subj_condition2, temp)
 }
 
-subj_f_e1 = subj_effect1 %>%
+subj_f_2 = subj_condition2 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
     time= as.numeric(gsub('X','',time))
-    , parameter = 1
+    , condition = 2
   )
-subj_f_e1_sum = subj_f_e1 %>%
+subj_f_2_sum = subj_f_2 %>%
   dplyr::group_by(
     time
     , id
@@ -379,98 +376,19 @@ subj_f_e1_sum = subj_f_e1 %>%
     , lo50 = quantile(value,.25)
     , hi50 = quantile(value,.75)
   )
-subj_f_e1_sum %>%
+subj_f_2_sum %>%
   ggplot()+
   geom_line(aes(x=time, y=med, color=factor(id)))+
   geom_line(aes(x=time, y=hi95, color=factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95, color=factor(id)), linetype = "dashed")+
-  ggtitle("effects 1")
-
-# effect 2
-subj_effect2 = NULL
-for (si in 1:dim(subj_f)[2]) {
-  temp = data.frame(subj_f[,si,,3])
-  temp$id = si
-  temp$sample = 1:nrow(temp)
-  subj_effect2 = rbind(subj_effect2, temp)
-}
-
-subj_f_e2 = subj_effect2 %>%
-  gather(key="time", value="value", -c(sample, id)) %>%
-  dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
-    , parameter = 1
-  )
-subj_f_e2_sum = subj_f_e2 %>%
-  dplyr::group_by(
-    time
-    , id
-  ) %>%
-  dplyr::summarise(
-    med = median(value)
-    , lo95 = quantile(value,.025)
-    , hi95 = quantile(value,.975)
-    , lo50 = quantile(value,.25)
-    , hi50 = quantile(value,.75)
-  )
-subj_f_e2_sum %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med, color=factor(id)))+
-  geom_line(aes(x=time, y=hi95, color=factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95, color=factor(id)), linetype = "dashed")+
-  ggtitle("effects 2")
-
-# effect 3
-subj_effect3 = NULL
-for (si in 1:dim(subj_f)[2]) {
-  temp = data.frame(subj_f[,si,,4])
-  temp$id = si
-  temp$sample = 1:nrow(temp)
-  subj_effect3 = rbind(subj_effect3, temp)
-}
-
-subj_f_e3 = subj_effect3 %>%
-  gather(key="time", value="value", -c(sample, id)) %>%
-  dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
-    , parameter = 1
-  )
-subj_f_e3_sum = subj_f_e3 %>%
-  dplyr::group_by(
-    time
-    , id
-  ) %>%
-  dplyr::summarise(
-    med = median(value)
-    , lo95 = quantile(value,.025)
-    , hi95 = quantile(value,.975)
-    , lo50 = quantile(value,.25)
-    , hi50 = quantile(value,.75)
-  )
-subj_f_e3_sum %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med, color=factor(id)))+
-  geom_line(aes(x=time, y=hi95, color=factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95, color=factor(id)), linetype = "dashed")+
-  ggtitle("effects 3")
+  ggtitle("condition 2")
 
 # get GP of conditions
-subj_f_sum = subj_f_I
-subj_f_sum$value2 = subj_f_e1$value
-subj_f_sum$value3 = subj_f_e2$value
-subj_f_sum$value4 = subj_f_e3$value
+subj_f_sum = rbind(subj_f_1, subj_f_2)
+subj_f_sum %>%
+  spread(condition, value) -> subj_f_sum
 
-subj_condition1 = subj_f_sum$value + subj_f_sum$value2/2 + subj_f_sum$value3/2 + subj_f_sum$value4/4
-subj_condition2 = subj_f_sum$value - subj_f_sum$value2/2 + subj_f_sum$value3/2 - subj_f_sum$value4/4
-subj_condition3 = subj_f_sum$value + subj_f_sum$value2/2 - subj_f_sum$value3/2 - subj_f_sum$value4/4
-subj_condition4 = subj_f_sum$value - subj_f_sum$value2/2 - subj_f_sum$value3/2 + subj_f_sum$value4/4
-
-subj_f_sum = cbind(subj_f_sum, data.frame(
-  condition1 = subj_condition1
-  , condition2 = subj_condition2
-  , condition3 = subj_condition3
-  , condition4 = subj_condition4
-  ))
+names(subj_f_sum)[4:5] = c("condition1", "condition2")
 
 subj_to_plot = subj_f_sum %>%
   dplyr::group_by(
@@ -489,18 +407,6 @@ subj_to_plot = subj_f_sum %>%
     , hi95_2 = quantile(condition2,.975)
     , lo50_2 = quantile(condition2,.25)
     , hi50_2 = quantile(condition2,.75)
-    
-    , med_3 = median(condition3)
-    , lo95_3 = quantile(condition3,.025)
-    , hi95_3 = quantile(condition3,.975)
-    , lo50_3 = quantile(condition3,.25)
-    , hi50_3 = quantile(condition3,.75)
-    
-    , med_4 = median(condition4)
-    , lo95_4 = quantile(condition4,.025)
-    , hi95_4 = quantile(condition4,.975)
-    , lo50_4 = quantile(condition4,.25)
-    , hi50_4 = quantile(condition4,.75)
   )
 
 subj_to_plot %>%
@@ -521,41 +427,157 @@ subj_to_plot %>%
   ylab('value')+
   xlab('time')
 
-subj_to_plot %>%
+
+# Noise ----
+noise_subj_f = rstan::extract(
+  post
+  , pars = 'noise_subj_f'
+)[[1]]
+
+# condition1
+noise_subj_condition1 = NULL
+for (si in 1:dim(noise_subj_f)[2]) {
+  temp = data.frame(noise_subj_f[,si,,1])
+  temp$id = si
+  temp$sample = 1:nrow(temp)
+  noise_subj_condition1 = rbind(noise_subj_condition1, temp)
+}
+
+noise_subj_f_1 = noise_subj_condition1 %>%
+  gather(key="time", value="value", -c(sample, id)) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 1
+  )
+noise_subj_f_1_sum = noise_subj_f_1 %>%
+  dplyr::group_by(
+    time
+    , id
+  ) %>%
+  dplyr::summarise(
+    med = median(value)
+    , lo95 = quantile(value,.025)
+    , hi95 = quantile(value,.975)
+    , lo50 = quantile(value,.25)
+    , hi50 = quantile(value,.75)
+  )
+noise_subj_f_1_sum %>%
   ggplot()+
-  geom_line(aes(x=time, y=med_3*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)))+
-  geom_line(aes(x=time, y=hi95_3*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_3*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_id_meansz, condition == "condition3"), aes(x=time_lores/bin_width+1, y=position_bin_avg, group = id), alpha = 1)+
+  geom_line(aes(x=time, y=med, color=factor(id)))+
+  geom_line(aes(x=time, y=hi95, color=factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95, color=factor(id)), linetype = "dashed")+
+  ggtitle("condition1")
+
+
+# condition2
+noise_subj_condition2 = NULL
+for (si in 1:dim(noise_subj_f)[2]) {
+  temp = data.frame(noise_subj_f[,si,,2])
+  temp$id = si
+  temp$sample = 1:nrow(temp)
+  noise_subj_condition2 = rbind(noise_subj_condition2, temp)
+}
+
+noise_subj_f_2 = noise_subj_condition2 %>%
+  gather(key="time", value="value", -c(sample, id)) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 2
+  )
+noise_subj_f_2_sum = noise_subj_f_2 %>%
+  dplyr::group_by(
+    time
+    , id
+  ) %>%
+  dplyr::summarise(
+    med = median(value)
+    , lo95 = quantile(value,.025)
+    , hi95 = quantile(value,.975)
+    , lo50 = quantile(value,.25)
+    , hi50 = quantile(value,.75)
+  )
+noise_subj_f_2_sum %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med, color=factor(id)))+
+  geom_line(aes(x=time, y=hi95, color=factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95, color=factor(id)), linetype = "dashed")+
+  ggtitle("condition 2")
+
+# get SDs
+df_long_trimz$position_bin_scaled = scale(df_long_trimz$position_bin)[,1]
+
+df_long_trimz %>%
+  group_by(id, time_lores, condition) %>%
+  dplyr::summarise(
+    SD = log(sd(position_bin_scaled))
+  ) -> noise_df_long_trimz
+
+# get GP of conditions
+noise_subj_f_sum = rbind(noise_subj_f_1, noise_subj_f_2)
+noise_subj_f_sum %>%
+  spread(condition, value) -> noise_subj_f_sum
+
+names(noise_subj_f_sum)[4:5] = c("condition1", "condition2")
+
+noise_subj_to_plot = noise_subj_f_sum %>%
+  dplyr::group_by(
+    time
+    , id
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(condition1)
+    , lo95_1 = quantile(condition1,.025)
+    , hi95_1 = quantile(condition1,.975)
+    , lo50_1 = quantile(condition1,.25)
+    , hi50_1 = quantile(condition1,.75)
+    
+    , med_2 = median(condition2)
+    , lo95_2 = quantile(condition2,.025)
+    , hi95_2 = quantile(condition2,.975)
+    , lo50_2 = quantile(condition2,.25)
+    , hi50_2 = quantile(condition2,.75)
+  )
+
+noise_subj_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1, color = factor(id)))+
+  geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
+  geom_line(data = subset(noise_df_long_trimz, condition == "condition1"), aes(x=time_lores/bin_width+1, y=SD, group = id), alpha = 1)+
   ylab('value')+
   xlab('time')
 
-subj_to_plot %>%
+noise_subj_to_plot %>%
   ggplot()+
-  geom_line(aes(x=time, y=med_4*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)))+
-  geom_line(aes(x=time, y=hi95_4*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_4*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin), color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_id_meansz, condition == "condition4"), aes(x=time_lores/bin_width+1, y=position_bin_avg, group = id), alpha = 1)+
+  geom_line(aes(x=time, y=med_2, color = factor(id)))+
+  geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
+  geom_line(data = subset(noise_df_long_trimz, condition == "condition2"), aes(x=time_lores/bin_width+1, y=SD, group = id), alpha = 1)+
   ylab('value')+
   xlab('time')
 
- 
-# visualize GPs
+
+
+###################################################################
+####                 Population Level                          ####
+###################################################################
+
+# Position ----
 f = rstan::extract(
   post
   , pars = 'f'
 )[[1]]
 
 # get GP of intercept
-intercept = data.frame(f[,,1])
-intercept$sample = 1:nrow(intercept)
-f_I = intercept %>%
+condition1 = data.frame(f[,,1])
+condition1$sample = 1:nrow(condition1)
+f_1 = condition1 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
     time= as.numeric(gsub('X','',time))
-    , parameter = 1
+    , condition = 1
   )
-f_I_sum = f_I %>%
+f_1_sum = f_1 %>%
   dplyr::group_by(
     time
   ) %>%
@@ -566,23 +588,23 @@ f_I_sum = f_I %>%
     , lo50 = quantile(value,.25)
     , hi50 = quantile(value,.75)
   )
-f_I_sum %>%
+f_1_sum %>%
   ggplot()+
-  ggtitle("intercept")+
+  ggtitle("condition1")+
   geom_line(aes(x=time, y=med))+
   geom_line(aes(x=time, y=hi95), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95), linetype = "dashed")
 
-# get GP of effect 1
-effect1 = data.frame(f[,,2])
-effect1$sample = 1:nrow(effect1)
-f_e1 = effect1 %>%
+# get GP of condition 2
+condition2 = data.frame(f[,,2])
+condition2$sample = 1:nrow(condition2)
+f_2 = condition2 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
     time= as.numeric(gsub('X','',time))
-    , parameter = 2
+    , condition = 2
   )
-f_e1_sum = f_e1 %>%
+f_2_sum = f_2 %>%
   dplyr::group_by(
     time
   ) %>%
@@ -593,84 +615,19 @@ f_e1_sum = f_e1 %>%
     , lo50 = quantile(value,.25)
     , hi50 = quantile(value,.75)
   )
-f_e1_sum %>%
+f_2_sum %>%
   ggplot()+
-  ggtitle("effect")+
-  geom_line(aes(x=time, y=med))+
-  geom_line(aes(x=time, y=hi95), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95), linetype = "dashed")
-
-# get GP of effect 2
-effect2 = data.frame(f[,,3])
-effect2$sample = 1:nrow(effect2)
-f_e2 = effect2 %>%
-  gather(key="time", value="value", -sample) %>%
-  dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
-    , parameter = 2
-  )
-f_e2_sum = f_e2 %>%
-  dplyr::group_by(
-    time
-  ) %>%
-  dplyr::summarise(
-    med = median(value)
-    , lo95 = quantile(value,.025)
-    , hi95 = quantile(value,.975)
-    , lo50 = quantile(value,.25)
-    , hi50 = quantile(value,.75)
-  )
-f_e2_sum %>%
-  ggplot()+
-  ggtitle("effect")+
-  geom_line(aes(x=time, y=med))+
-  geom_line(aes(x=time, y=hi95), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95), linetype = "dashed")
-
-# get GP of effect 3
-effect3 = data.frame(f[,,4])
-effect3$sample = 1:nrow(effect3)
-f_e3 = effect3 %>%
-  gather(key="time", value="value", -sample) %>%
-  dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
-    , parameter = 2
-  )
-f_e3_sum = f_e3 %>%
-  dplyr::group_by(
-    time
-  ) %>%
-  dplyr::summarise(
-    med = median(value)
-    , lo95 = quantile(value,.025)
-    , hi95 = quantile(value,.975)
-    , lo50 = quantile(value,.25)
-    , hi50 = quantile(value,.75)
-  )
-f_e3_sum %>%
-  ggplot()+
-  ggtitle("effect")+
+  ggtitle("condition2")+
   geom_line(aes(x=time, y=med))+
   geom_line(aes(x=time, y=hi95), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95), linetype = "dashed")
 
 # get GP of conditions
-f_sum = f_I
-f_sum$value2 = f_e1$value
-f_sum$value3 = f_e2$value
-f_sum$value4 = f_e3$value
+f_sum = rbind(f_1, f_2)
+f_sum %>%
+  spread(condition, value) -> f_sum
 
-condition1 = f_sum$value + f_sum$value2/2 + f_sum$value3/2 + f_sum$value4/4
-condition2 = f_sum$value - f_sum$value2/2 + f_sum$value3/2 - f_sum$value4/4
-condition3 = f_sum$value + f_sum$value2/2 - f_sum$value3/2 - f_sum$value4/4
-condition4 = f_sum$value - f_sum$value2/2 - f_sum$value3/2 + f_sum$value4/4
-
-f_sum = cbind(f_sum, data.frame(
-  condition1 = condition1
-  , condition2 = condition2
-  , condition3 = condition3
-  , condition4 = condition4
-))
+names(f_sum)[3:4] = c("condition1", "condition2")
 
 to_plot = f_sum %>%
   dplyr::group_by(
@@ -688,31 +645,15 @@ to_plot = f_sum %>%
     , hi95_2 = quantile(condition2,.975)
     , lo50_2 = quantile(condition2,.25)
     , hi50_2 = quantile(condition2,.75)
-    
-    , med_3 = median(condition3)
-    , lo95_3 = quantile(condition3,.025)
-    , hi95_3 = quantile(condition3,.975)
-    , lo50_3 = quantile(condition3,.25)
-    , hi50_3 = quantile(condition3,.75)
-    
-    , med_4 = median(condition4)
-    , lo95_4 = quantile(condition4,.025)
-    , hi95_4 = quantile(condition4,.975)
-    , lo50_4 = quantile(condition4,.25)
-    , hi50_4 = quantile(condition4,.75)
   )
 
-
-
 # load real population means 
-df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data3_group.rds")
+df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal.rds")
 # set to zero
 df_pop %>%
   dplyr::mutate(
     condition1 = condition1 - condition1[time == 0]
     , condition2 = condition2 - condition2[time == 0]
-    , condition3 = condition3 - condition3[time == 0]
-    , condition4 = condition4 - condition4[time == 0]
   ) -> df_pop
 
 to_plot %>%
@@ -735,22 +676,124 @@ to_plot %>%
   ylab('value')+
   xlab('time')
 
-to_plot %>%
+
+# Noise ----
+noise_f = rstan::extract(
+  post
+  , pars = 'noise_f'
+)[[1]]
+
+# get GP of intercept
+noise_condition1 = data.frame(noise_f[,,1])
+noise_condition1$sample = 1:nrow(noise_condition1)
+noise_f_1 = noise_condition1 %>%
+  gather(key="time", value="value", -sample) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 1
+  )
+noise_f_1_sum = noise_f_1 %>%
+  dplyr::group_by(
+    time
+  ) %>%
+  dplyr::summarise(
+    med = median(value)
+    , lo95 = quantile(value,.025)
+    , hi95 = quantile(value,.975)
+    , lo50 = quantile(value,.25)
+    , hi50 = quantile(value,.75)
+  )
+noise_f_1_sum %>%
   ggplot()+
-  geom_line(aes(x=time, y=med_3*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), color = "turquoise")+
-  geom_line(aes(x=time, y=hi95_3*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "turquoise")+
-  geom_line(aes(x=time, y=lo95_3*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "turquoise")+
-  geom_line(data=subset(df_condition_meansz, condition == "condition3"), aes(x=time_lores/bin_width+1, y=position_bin_grand_avg), alpha = 0.5)+
-  geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition3))+
+  ggtitle("condition1")+
+  geom_line(aes(x=time, y=med))+
+  geom_line(aes(x=time, y=hi95), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95), linetype = "dashed")
+
+# get GP of condition 2
+noise_condition2 = data.frame(noise_f[,,2])
+noise_condition2$sample = 1:nrow(noise_condition2)
+noise_f_2 = noise_condition2 %>%
+  gather(key="time", value="value", -sample) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 2
+  )
+noise_f_2_sum = noise_f_2 %>%
+  dplyr::group_by(
+    time
+  ) %>%
+  dplyr::summarise(
+    med = median(value)
+    , lo95 = quantile(value,.025)
+    , hi95 = quantile(value,.975)
+    , lo50 = quantile(value,.25)
+    , hi50 = quantile(value,.75)
+  )
+noise_f_2_sum %>%
+  ggplot()+
+  ggtitle("condition2")+
+  geom_line(aes(x=time, y=med))+
+  geom_line(aes(x=time, y=hi95), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95), linetype = "dashed")
+
+# get GP of conditions
+noise_f_sum = rbind(noise_f_1, noise_f_2)
+noise_f_sum %>%
+  spread(condition, value) -> noise_f_sum
+
+names(noise_f_sum)[3:4] = c("condition1", "condition2")
+
+noise_to_plot = noise_f_sum %>%
+  dplyr::group_by(
+    time
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(condition1)
+    , lo95_1 = quantile(condition1,.025)
+    , hi95_1 = quantile(condition1,.975)
+    , lo50_1 = quantile(condition1,.25)
+    , hi50_1 = quantile(condition1,.75)
+    
+    , med_2 = median(condition2)
+    , lo95_2 = quantile(condition2,.025)
+    , hi95_2 = quantile(condition2,.975)
+    , lo50_2 = quantile(condition2,.25)
+    , hi50_2 = quantile(condition2,.75)
+  )
+
+noise_df_long_trimz %>%
+  group_by(time_lores, condition) %>%
+  dplyr::summarise(
+    avg_SD = mean(SD)
+  ) -> subj_noise
+
+# # load real population means
+# noise_df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_noise.rds")
+# # set to zero
+# noise_df_pop %>%
+#   dplyr::mutate(
+#     condition1 = condition1 - condition1[time == 0]
+#     , condition2 = condition2 - condition2[time == 0]
+#   ) -> noise_df_pop
+
+noise_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = "turquoise")+
+  geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(data=subset(subj_noise, condition == "condition1"), aes(x=time_lores/bin_width+1, y=avg_SD), alpha = 0.5)+
+  # geom_line(data=noise_df_pop, aes(x = time/bin_width+1, y = condition1))+
   ylab('value')+
   xlab('time')
 
-to_plot %>%
+noise_to_plot %>%
   ggplot()+
-  geom_line(aes(x=time, y=med_4*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), color = "turquoise")+
-  geom_line(aes(x=time, y=hi95_4*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "turquoise")+
-  geom_line(aes(x=time, y=lo95_4*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "turquoise")+
-  geom_line(data=subset(df_condition_meansz, condition == "condition4"), aes(x=time_lores/bin_width+1, y=position_bin_grand_avg), alpha = 0.5)+
-  geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition4))+
+  geom_line(aes(x=time, y=med_2), color = "red")+
+  geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
+  geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
+  geom_line(data=subset(subj_noise, condition == "condition2"), aes(x=time_lores/bin_width+1, y=avg_SD), alpha = 0.5)+
+  # geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition2))+
   ylab('value')+
   xlab('time')
+

@@ -1,8 +1,5 @@
 # Upload stan_data ----
-load("fake_stan_data3.Rdata")
-# load("stan_data.Rdata")
-# load("stan_data_15.Rdata")
-# load("stan_data_21.rdata")
+load("fake_stan_data_proposal.Rdata")
 
 
 # Load Packages ----
@@ -18,7 +15,7 @@ mod = rstan::stan_model("gp_regression.stan")
 post = sampling(
  mod
   , data = data_for_stan
-  , iter = 3000
+  , iter = 1000
   , init = 0
   , chains = 16
   , cores = 16
@@ -34,12 +31,16 @@ post = sampling(
   , 'subj_f_normal01'
   , 'volatility_helper'
   , 'subj_volatility_helper'
+  , 'noise_f_normal01'
+  , 'noise_subj_f_normal01'
+  , 'noise_volatility_helper'
+  , 'noise_subj_volatility_helper'
   )
 )
 
 #save result for later
 save(
   post
-  , file = 'fake3_post_3000.rdata'
+  , file = 'fake_proposal_post_test.rdata'
 )
 

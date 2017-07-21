@@ -55,7 +55,7 @@ get_subj_Sigmas = function(subj_amplitude_sd, subj_volatility_sd, Sigmas){
 
 
 # Experimental parameters ----
-n = 16  # number of participants
+n = 20  # number of participants
 
 # trajectory time points
 x = 0:100/100  # I make it 0 to 1 so that amplitudes and volatilities are on the right scale
@@ -67,24 +67,24 @@ mu = rep(0, n_x)
 
 # Group GPs ----
 # covariance matrix with hyperparameters
-# c(intercept, effect1, effect2, interaction_effect)
-# 0.5 contrast matrix 
-amplitudes = c(0.11, 1.35, 0.68, 0.20)
-volatilities = c(1.22, 1.31, 0.91, 0.10)
+# c(condition1, condition2)
+# 1s contrast matrix 
+amplitudes = c(0.80, 1.35)
+volatilities = c(1.22, 1.31)
 
 Sigmas = get_Sigmas(amplitudes, volatilities)
 
 
 # Group GPs for Noise ----
-namplitudes = c(0.50, 0.60, 0.40, 0.55)
-nvolatilities = c(0.35, 0.31, 0.91, 0.10)
+namplitudes = c(0.30, 0.40)
+nvolatilities = c(0.35, 0.31)
 
 nSigmas = get_Sigmas(namplitudes, nvolatilities)
 
 
 # Sample Mean Functions ----
-subj_amplitude_sd = c(0.13, 0.23, 0.30, 0.25)
-subj_volatility_sd = c(2.91, 2.34, 2.51, 2.48)
+subj_amplitude_sd = c(0.13, 0.23)
+subj_volatility_sd = c(2.91, 2.34)
 
 temp = get_subj_Sigmas(subj_amplitude_sd, subj_volatility_sd, Sigmas)
 fs = temp$fs
@@ -94,23 +94,15 @@ df = do.call(rbind, fs_subj)
 df$parameter = factor(
   ifelse(
     df$parameter == 1
-    , "intercept"
-    , ifelse(
-      df$parameter == 2
-      , "effect1"
-      , ifelse(
-        df$parameter == 3
-        , "effect2"
-        , "interaction_effect"
-      )
-    )
+    , "condition1"
+    , "condition2"
   )
 )
 
 
 # Sample Noise Functions ----
-subj_namplitude_sd = c(0.13, 0.23, 0.30, 0.25)
-subj_nvolatility_sd = c(2.91, 2.34, 2.51, 2.48)
+subj_namplitude_sd = c(0.13, 0.23)
+subj_nvolatility_sd = c(2.91, 2.34)
 
 temp = get_subj_Sigmas(subj_namplitude_sd, subj_nvolatility_sd, nSigmas)
 fs_noise = temp$fs
@@ -120,16 +112,8 @@ df_noise = do.call(rbind, fs_noise_subj)
 df_noise$parameter = factor(
   ifelse(
     df_noise$parameter == 1
-    , "intercept"
-    , ifelse(
-      df_noise$parameter == 2
-      , "effect1"
-      , ifelse(
-        df_noise$parameter == 3
-        , "effect2"
-        , "interaction_effect"
-      )
-    )
+    , "condition1"
+    , "condition2"
   )
 )
 
@@ -137,46 +121,23 @@ df_noise$parameter = factor(
 # Visualizing and Saving Group f(x)s ----
 df_pop = do.call(cbind, fs)
 df_pop = data.frame(df_pop)
-names(df_pop) = c("intercept", "effect1", "effect2", "interaction_effect")
+names(df_pop) = c("condition1", "condition2")  
 df_pop %>%
   mutate(
     time = x
-    , condition1 = intercept + effect1/2 + effect2/2 + interaction_effect/4
-    , condition2 = intercept - effect1/2 + effect2/2 - interaction_effect/4
-    , condition3 = intercept + effect1/2 - effect2/2 - interaction_effect/4
-    , condition4 = intercept - effect1/2 - effect2/2 + interaction_effect/4
   ) -> df_pop
 
-# same generative function (f(x))
-saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data_noise1_group.rds")
+# save generative function (f(x))
+saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_test/fake_data_proposal.rds")
 
 df_pop %>%
-  gather(parameter, value, intercept:interaction_effect) %>%
-  ggplot()+
-    geom_line(aes(x=time, y=value))+
-    facet_grid(parameter~.)
-
-df_pop %>%
-  gather(condition, value, condition1:condition4) %>%
+  gather(condition, value, condition1:condition2) %>%
   ggplot()+
     geom_line(aes(x=time, y=value))+
     facet_grid(condition~.)
 
-df %>%
-  ggplot()+
-  geom_line(aes(x=time, y=value, color=factor(id)), alpha = 0.3)+
-  facet_grid(parameter~.)+
-  theme(legend.position="none")
-
-df %>%
-  spread(parameter, value) %>%
-  mutate(
-    condition1 = intercept + effect1/2 + effect2/2 + interaction_effect/4
-    , condition2 = intercept - effect1/2 + effect2/2 - interaction_effect/4
-    , condition3 = intercept + effect1/2 - effect2/2 - interaction_effect/4
-    , condition4 = intercept - effect1/2 - effect2/2 + interaction_effect/4
-    ) %>%
-  gather(condition, value, condition1:condition4) -> df_cond
+names(df)[2] = c("condition")
+df_cond = df
 
 df_cond %>%
   ggplot()+
@@ -188,46 +149,23 @@ df_cond %>%
 # Visualizing and Saving Noise f(x)s ----
 df_noise_pop = do.call(cbind, fs_noise)
 df_noise_pop = data.frame(df_noise_pop)
-names(df_noise_pop) = c("intercept", "effect1", "effect2", "interaction_effect")
+names(df_noise_pop) = c("condition1", "condition2") 
 df_noise_pop %>%
   mutate(
     time = x
-    , condition1 = intercept + effect1/2 + effect2/2 + interaction_effect/4
-    , condition2 = intercept - effect1/2 + effect2/2 - interaction_effect/4
-    , condition3 = intercept + effect1/2 - effect2/2 - interaction_effect/4
-    , condition4 = intercept - effect1/2 - effect2/2 + interaction_effect/4
   ) -> df_noise_pop
 
 # same generative function (f(x))
-saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data_noise1_noise.rds")
+saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_test/fake_data_proposal_noise.rds")
 
 df_noise_pop %>%
-  gather(parameter, value, intercept:interaction_effect) %>%
-  ggplot()+
-  geom_line(aes(x=time, y=value))+
-  facet_grid(parameter~.)
-
-df_noise_pop %>%
-  gather(condition, value, condition1:condition4) %>%
+  gather(condition, value, condition1:condition2) %>%
   ggplot()+
   geom_line(aes(x=time, y=value))+
   facet_grid(condition~.)
 
-df_noise %>%
-  ggplot()+
-  geom_line(aes(x=time, y=value, color=factor(id)), alpha = 0.3)+
-  facet_grid(parameter~.)+
-  theme(legend.position="none")
-
-df_noise %>%
-  spread(parameter, value) %>%
-  mutate(
-    condition1 = intercept + effect1/2 + effect2/2 + interaction_effect/4
-    , condition2 = intercept - effect1/2 + effect2/2 - interaction_effect/4
-    , condition3 = intercept + effect1/2 - effect2/2 - interaction_effect/4
-    , condition4 = intercept - effect1/2 - effect2/2 + interaction_effect/4
-  ) %>%
-  gather(condition, value, condition1:condition4) -> df_noise_cond
+names(df_noise)[2] = c("condition")
+df_noise_cond = df_noise
 
 df_noise_cond %>%
   ggplot()+
@@ -281,4 +219,4 @@ names(df_final)[5] = c("position")
 df_final$coordinate = factor("z")
 
 # Save File ----
-saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/fake_data_noise1.rds")
+saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_test/fake_data_proposal_noise1.rds")
