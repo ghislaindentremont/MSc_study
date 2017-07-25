@@ -76,10 +76,11 @@ Sigmas = get_Sigmas(amplitudes, volatilities)
 
 
 # Group GPs for Noise ----
-namplitudes = c(0.30, 0.40)
-nvolatilities = c(0.35, 0.31)
+namplitudes = c(0.50, 0.60)
+nvolatilities = c(0.45, 0.51)
 
 nSigmas = get_Sigmas(namplitudes, nvolatilities)
+
 
 
 # Sample Mean Functions ----
@@ -99,6 +100,36 @@ df$parameter = factor(
   )
 )
 
+names(df)[2] = c("condition")
+
+df %>%
+  ggplot()+
+  geom_line(aes(x=time, y=value, color=factor(id)), alpha = 0.3)+
+  facet_grid(condition~.)+
+  theme(legend.position="none")
+
+# save generative function (f(x))
+saveRDS(df, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_subj.rds")
+
+# population
+df_pop = do.call(cbind, fs)
+df_pop = data.frame(df_pop)
+names(df_pop) = c("condition1", "condition2")  
+df_pop %>%
+  mutate(
+    time = x
+  ) -> df_pop
+
+df_pop %>%
+  gather(condition, value, condition1:condition2) %>%
+  ggplot()+
+  geom_line(aes(x=time, y=value))+
+  facet_grid(condition~.)
+
+# save generative function (f(x))
+saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_pop.rds")
+
+
 
 # Sample Noise Functions ----
 subj_namplitude_sd = c(0.13, 0.23)
@@ -117,36 +148,18 @@ df_noise$parameter = factor(
   )
 )
 
+names(df_noise)[2] = c("condition")
 
-# Visualizing and Saving Group f(x)s ----
-df_pop = do.call(cbind, fs)
-df_pop = data.frame(df_pop)
-names(df_pop) = c("condition1", "condition2")  
-df_pop %>%
-  mutate(
-    time = x
-  ) -> df_pop
-
-# save generative function (f(x))
-saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_test/fake_data_proposal.rds")
-
-df_pop %>%
-  gather(condition, value, condition1:condition2) %>%
-  ggplot()+
-    geom_line(aes(x=time, y=value))+
-    facet_grid(condition~.)
-
-names(df)[2] = c("condition")
-df_cond = df
-
-df_cond %>%
+df_noise %>%
   ggplot()+
   geom_line(aes(x=time, y=value, color=factor(id)), alpha = 0.3)+
   facet_grid(condition~.)+
   theme(legend.position="none")
 
+# save generative function (f(x))
+saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_subj_noise.rds")
 
-# Visualizing and Saving Noise f(x)s ----
+# population
 df_noise_pop = do.call(cbind, fs_noise)
 df_noise_pop = data.frame(df_noise_pop)
 names(df_noise_pop) = c("condition1", "condition2") 
@@ -155,37 +168,28 @@ df_noise_pop %>%
     time = x
   ) -> df_noise_pop
 
-# same generative function (f(x))
-saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_test/fake_data_proposal_noise.rds")
-
 df_noise_pop %>%
   gather(condition, value, condition1:condition2) %>%
   ggplot()+
   geom_line(aes(x=time, y=value))+
   facet_grid(condition~.)
 
-names(df_noise)[2] = c("condition")
-df_noise_cond = df_noise
-
-df_noise_cond %>%
-  ggplot()+
-  geom_line(aes(x=time, y=value, color=factor(id)), alpha = 0.3)+
-  facet_grid(condition~.)+
-  theme(legend.position="none")
+# same generative function (f(x))
+saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_pop_noise.rds")
 
 
 
 # Sampling from f(x)s with noise ----
 n_trials_by_condition = 100
 
-mean(df_cond$id == df_noise_cond$id)
-mean(df_cond$time == df_noise_cond$time)
-mean(df_cond$condition == df_noise_cond$condition)
+mean(df$id == df_noise$id)
+mean(df$time == df_noise$time)
+mean(df$condition == df_noise$condition)
 
-df_cond$noise = df_noise_cond$value
+df$noise = df_noise$value
 
 df_final2 = ddply(
-  .data = df_cond
+  .data = df
   , .variables = c("condition","id")
   , .fun = function(df_piece) {
     f_noise = t(mvrnorm(n_trials_by_condition, df_piece$value, exp(df_piece$noise)^2*diag(nrow(df_piece))))
@@ -219,4 +223,4 @@ names(df_final)[5] = c("position")
 df_final$coordinate = factor("z")
 
 # Save File ----
-saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_test/fake_data_proposal_noise1.rds")
+saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal.rds")

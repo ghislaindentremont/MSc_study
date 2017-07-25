@@ -15,7 +15,7 @@ mod = rstan::stan_model("gp_regression.stan")
 post = sampling(
  mod
   , data = data_for_stan
-  , iter = 1000
+  , iter = 500
   , init = 0
   , chains = 16
   , cores = 16
@@ -41,6 +41,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'fake_proposal_post_test.rdata'
+  , file = 'fake_proposal_post_500.rdata'
 )
 
