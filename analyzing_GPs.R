@@ -19,10 +19,10 @@ summary(df_long_trim)
 
 head(df_long_trim)
 
-# set trial start to zero
-df_long_trim %>%
-  group_by(id, trial, condition, coordinate) %>%
-  dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
+# # set trial start to zero
+# df_long_trim %>%
+#   group_by(id, trial, condition, coordinate) %>%
+#   dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
 
 # it looks like there is a slight sub-grouping within each target condition. Probably explained by the cues which 
 # are ignored here
@@ -307,7 +307,7 @@ data_for_stan = list(
 )
 
 # # package for googleComputeEngine
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_stan_data_proposal.Rdata")
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_stan_data_proposal_noshift.Rdata")
 
 # # # see cluster_analysis
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
@@ -340,7 +340,7 @@ data_for_stan = list(
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_proposal_post_500.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_proposal_post_500_noshift.rdata")
 
 
 
@@ -414,7 +414,7 @@ get_50_HDI = function(y) {
 }
 
 # get violin plots
-get_violin = function(df, y_lab, samps, hline = FALSE, facet = FALSE) {
+get_violin = function(df, y_lab, samps = 16*500/2, hline = FALSE, facet = FALSE) {
   
   df$condition = factor(df$condition)
   
@@ -452,18 +452,13 @@ get_violin = function(df, y_lab, samps, hline = FALSE, facet = FALSE) {
 
 post_samples = rstan::extract(post)
 
-
-# NOTE: if first sample in space is set to 0
-# what is the effect on the displacement parameters? 
-# The amplitude parameters might be shifted downwards because the average starts are set to around zero 
-
 # displacement volatilty
 volatilities = data.frame(post_samples$volatility)
 names(volatilities) = c("condition1", "condition2")
 volatilities %>%
   gather(condition, value, condition1:condition2) -> volatilities
 
-gg_volatilities = get_violin(volatilities, "volatility", 4000)
+gg_volatilities = get_violin(volatilities, "volatility")
 
 gg_volatilities+ 
   geom_segment(aes(x = 0.5, y = 1.22, xend = 1.5, yend = 1.22), linetype = 'dotted', size = 0.5)+ 
@@ -475,40 +470,51 @@ names(amplitudes) = c("condition1", "condition2")
 amplitudes %>%
   gather(condition, value, condition1:condition2) -> amplitudes
 
-gg_amplitudes = get_violin(amplitudes, "amplitude", 4000)
+gg_amplitudes = get_violin(amplitudes, "amplitude")
 
-# gg_amplitudes+
-#   geom_segment(aes(x = 0.5, y = 0.80, xend = 1.5, yend = 0.80), linetype = 'dotted', size = 0.5)+ 
-#   geom_segment(aes(x = 1.5, y = 1.35, xend = 2.5, yend = 1.35), linetype = 'dotted', size = 0.5)
+gg_amplitudes+
+  geom_segment(aes(x = 0.5, y = 0.80, xend = 1.5, yend = 0.80), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 1.35, xend = 2.5, yend = 1.35), linetype = 'dotted', size = 0.5)
 
 
-# displacement volatilty
+# participant displacement volatilty sd
 subj_volatility_sds = data.frame(post_samples$subj_volatility_sd)
 names(subj_volatility_sds) = c("condition1", "condition2")
 subj_volatility_sds %>%
   gather(condition, value, condition1:condition2) -> subj_volatility_sds
 
-get_violin(subj_volatility_sds, "participant volatility sd", 4000)
+gg_volatility_sds = get_violin(subj_volatility_sds, "participant volatility sd")
 
-# displacement amplitude
+gg_volatility_sds+
+  geom_segment(aes(x = 0.5, y = 2.91, xend = 1.5, yend = 2.91), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 2.34, xend = 2.5, yend = 2.34), linetype = 'dotted', size = 0.5)
+
+
+# participant displacement amplitude sd
 subj_amplitude_sds = data.frame(post_samples$subj_amplitude_sd)
 names(subj_amplitude_sds) = c("condition1", "condition2")
 subj_amplitude_sds %>%
   gather(condition, value, condition1:condition2) -> subj_amplitude_sds
 
-get_violin(subj_amplitude_sds, "participant amplitude sd", 4000)
+gg_amplitude_sds = get_violin(subj_amplitude_sds, "participant amplitude sd")
 
+gg_amplitude_sds+
+  geom_segment(aes(x = 0.5, y = 0.13, xend = 1.5, yend = 0.13), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 0.23, xend = 2.5, yend = 0.23), linetype = 'dotted', size = 0.5)
 
-
-# NOTE: if first sample in space is set to 0
-# the noise parameters that were set in the generative model won't be comparable
 # noise volatilty
 noise_volatilities = data.frame(post_samples$noise_volatility)
 names(noise_volatilities) = c("condition1", "condition2")
 noise_volatilities %>%
   gather(condition, value, condition1:condition2) -> noise_volatilities
 
-get_violin(noise_volatilities, "noise volatility", 4000)
+gg_noise_volatilities = get_violin(noise_volatilities, "noise volatility")
+
+# these are way off!
+gg_noise_volatilities+
+  geom_segment(aes(x = 0.5, y = 0.45, xend = 1.5, yend = 0.45), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 0.51, xend = 2.5, yend = 0.51), linetype = 'dotted', size = 0.5)
+
 
 # noise amplitude
 noise_amplitudes = data.frame(post_samples$noise_amplitude)
@@ -516,24 +522,36 @@ names(noise_amplitudes) = c("condition1", "condition2")
 noise_amplitudes %>%
   gather(condition, value, condition1:condition2) -> noise_amplitudes
 
-get_violin(noise_amplitudes, "noise amplitude", 4000)
+gg_noise_amplitudes = get_violin(noise_amplitudes, "noise amplitude")
 
-# noise volatilty
+# these are way off!
+gg_noise_amplitudes+
+  geom_segment(aes(x = 0.5, y = 0.50, xend = 1.5, yend = 0.50), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 0.60, xend = 2.5, yend = 0.60), linetype = 'dotted', size = 0.5)
+
+# participant noise volatilty sd
 noise_subj_volatility_sds = data.frame(post_samples$noise_subj_volatility_sd)
 names(noise_subj_volatility_sds) = c("condition1", "condition2")
 noise_subj_volatility_sds %>%
   gather(condition, value, condition1:condition2) -> noise_subj_volatility_sds
 
-get_violin(noise_subj_volatility_sds, "noise participant volatility sd", 4000)
+gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds, "noise participant volatility sd")
 
-# noise amplitude
+gg_noise_volatility_sds+
+  geom_segment(aes(x = 0.5, y = 2.91, xend = 1.5, yend = 2.91), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 2.34, xend = 2.5, yend = 2.34), linetype = 'dotted', size = 0.5)
+
+# participant noise amplitude sd
 noise_subj_amplitude_sds = data.frame(post_samples$noise_subj_amplitude_sd)
 names(noise_subj_amplitude_sds) = c("condition1", "condition2")
 noise_subj_amplitude_sds %>%
   gather(condition, value, condition1:condition2) -> noise_subj_amplitude_sds
 
-get_violin(noise_subj_amplitude_sds, "noise participant amplitude sd", 4000)
+gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds, "noise participant amplitude sd")
 
+gg_noise_amplitude_sds+
+  geom_segment(aes(x = 0.5, y = 0.13, xend = 1.5, yend = 0.13), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 0.23, xend = 2.5, yend = 0.23), linetype = 'dotted', size = 0.5)
 
 
 
@@ -609,7 +627,7 @@ subj_to_plot = subj_f_sum %>%
 df_subj = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_subj.rds")
 df_subj %>%
   group_by(id, condition) %>%
-  dplyr::mutate(value = value - value[time == 0]) %>%
+  # dplyr::mutate(value = value - value[time == 0]) %>%
   spread(condition, value) -> df_subj
 
 subj_to_plot %>%
@@ -727,13 +745,14 @@ df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Traject
 df_subj_noise %>%
   spread(condition, value) -> df_subj_noise
 
+# I believe the binning has resulted in a lost in noise!
 noise_subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
   geom_line(data = subset(noise_df_long_trimz, condition == "condition1"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
-  # geom_line(data=df_subj_noise, aes(x = time/bin_width+1, y = condition1, group = id), linetype = "longdash")+
+  geom_line(data=df_subj_noise, aes(x = time/bin_width+1, y = condition1, group = id), linetype = "longdash")+
   ylab('log standard deviation')+
   xlab('time')+
   ggtitle('condition 1')+
@@ -751,7 +770,7 @@ noise_subj_to_plot %>%
   geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
   geom_line(data = subset(noise_df_long_trimz, condition == "condition2"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
-  # geom_line(data=df_subj_noise, aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash")+
+  geom_line(data=df_subj_noise, aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash")+
   ylab('log standard deviation')+
   xlab('time')+
   ggtitle('condition 2')+
@@ -822,12 +841,12 @@ to_plot = f_sum %>%
 
 # load real population means 
 df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_pop.rds")
-# set to zero
-df_pop %>%
-  dplyr::mutate(
-    condition1 = condition1 - condition1[time == 0]
-    , condition2 = condition2 - condition2[time == 0]
-  ) -> df_pop
+# # set to zero
+# df_pop %>%
+#   dplyr::mutate(
+#     condition1 = condition1 - condition1[time == 0]
+#     , condition2 = condition2 - condition2[time == 0]
+#   ) -> df_pop
 
 to_plot %>%
   ggplot()+
@@ -874,8 +893,8 @@ to_plot %>%
   geom_line(aes(x=time, y=med_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), color = "red")+
   geom_line(aes(x=time, y=hi95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "red")+
   geom_line(aes(x=time, y=lo95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "red")+
-  annotate("text", label = "condition 1", x = 3, y = -0.5, color = "turquoise")+
-  annotate("text", label = "condition 2", x = 3, y = 0.75, color = "red")+
+  annotate("text", label = "condition 1", x = 3, y = -0.75, color = "turquoise")+
+  annotate("text", label = "condition 2", x = 4, y = -1.75, color = "red")+
   ylab('position')+
   xlab('time')+
   theme_gray(base_size = 20)+
@@ -993,7 +1012,7 @@ noise_to_plot %>%
   geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
   ylab('log standard deviation')+
   xlab('time')+
-  annotate("text", label = "condition 1", x = 3, y = -0.9, color = "turquoise")+
+  annotate("text", label = "condition 1", x = 3, y = -1.25, color = "turquoise")+
   annotate("text", label = "condition 2", x = 9, y = -0.20, color = "red")+
   theme_gray(base_size = 20)+
   theme(
@@ -1002,3 +1021,4 @@ noise_to_plot %>%
     , legend.position = "none"
     , panel.background = element_rect(fill = "white", color = "black")
   )
+

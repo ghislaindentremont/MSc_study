@@ -1,5 +1,5 @@
 # Upload stan_data ----
-load("fake_stan_data_proposal.Rdata")
+load("fake_stan_data_proposal_noshift.Rdata")
 
 
 # Load Packages ----
@@ -41,6 +41,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'fake_proposal_post_500.rdata'
+  , file = 'fake_proposal_post_500_noshift.rdata'
 )
 
