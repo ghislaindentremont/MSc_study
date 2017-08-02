@@ -58,7 +58,7 @@ get_subj_Sigmas = function(subj_amplitude_sd, subj_volatility_sd, Sigmas){
 n = 20  # number of participants
 
 # trajectory time points
-x = 0:100/100  # I make it 0 to 1 so that amplitudes and volatilities are on the right scale
+x = 0:10/10  # I make it 0 to 1 so that amplitudes and volatilities are on the right scale
 n_x = length(x)
 
 # mean function
@@ -109,7 +109,7 @@ df %>%
   theme(legend.position="none")
 
 # save generative function (f(x))
-saveRDS(df, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_subj.rds")
+saveRDS(df, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal_subj.rds")
 
 # population
 df_pop = do.call(cbind, fs)
@@ -127,7 +127,7 @@ df_pop %>%
   facet_grid(condition~.)
 
 # save generative function (f(x))
-saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_pop.rds")
+saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal_pop.rds")
 
 
 
@@ -157,7 +157,7 @@ df_noise %>%
   theme(legend.position="none")
 
 # save generative function (f(x))
-saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_subj_noise.rds")
+saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal_subj_noise.rds")
 
 # population
 df_noise_pop = do.call(cbind, fs_noise)
@@ -175,7 +175,7 @@ df_noise_pop %>%
   facet_grid(condition~.)
 
 # same generative function (f(x))
-saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_pop_noise.rds")
+saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal_pop_noise.rds")
 
 
 
@@ -223,4 +223,4 @@ names(df_final)[5] = c("position")
 df_final$coordinate = factor("z")
 
 # Save File ----
-saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal.rds")
+saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal.rds")

@@ -12,7 +12,7 @@ source('~/Documents/Experiments/Trajectory/GP Demos/Mike Demos/gp_example/prep_x
 
 # load a function to do some pre-computation on x
 # load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/data_trim.Rdata")
-df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal.rds")
+df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal.rds")
 
 # Look at Data ----
 summary(df_long_trim)
@@ -103,24 +103,30 @@ df_condition_means %>%
 df_long_trim %>%
   dplyr::filter(coordinate == "z") -> df_long_trimz
 
-# OF_NOTE: I bined the time axis and averaged over position values within a bin, within a trial
-# Should I be averaging these values?
-# I believe that it would be reasonable to have multiple position values for a given time point, in a given trial as
-# the Bayesian analysis could then consider those values as replicates and account for corresponding uncertainty
-# I believe that it would also be equivalent to trial replicates... In theory it would even be possible to account for 
-# variabilty associated for a given trial! Anyway, here we just average over each bin
-round0 = function(x,z){
-  round(x/z,0)*z
-}
+# # OF_NOTE: I bined the time axis and averaged over position values within a bin, within a trial
+# # Should I be averaging these values?
+# # I believe that it would be reasonable to have multiple position values for a given time point, in a given trial as
+# # the Bayesian analysis could then consider those values as replicates and account for corresponding uncertainty
+# # I believe that it would also be equivalent to trial replicates... In theory it would even be possible to account for 
+# # variabilty associated for a given trial! Anyway, here we just average over each bin
+# round0 = function(x,z){
+#   round(x/z,0)*z
+# }
 # will the trajectories be good enough with this low-resolution?
 # I average over bin to make analysis compute time reasonable
-# bin_width = 10
 bin_width = 0.1
-df_long_trimz$time_lores = round0(df_long_trimz$time, bin_width)
+# df_long_trimz$time_lores = round0(df_long_trimz$time, bin_width)
 
-df_long_trimz %>% 
-  group_by(id, coordinate, trial, time_lores, condition) %>%  # this is important because it organizes by id
-  dplyr::summarise(position_bin = mean(position)) -> df_long_trimz
+# no binning 
+df_long_trimz$time_lores = df_long_trim$time
+
+# df_long_trimz %>% 
+#   group_by(id, coordinate, trial, time_lores, condition) %>%  # this is important because it organizes by id
+#   dplyr::summarise(position_bin = mean(position)) -> df_long_trimz
+
+# no binning 
+df_long_trimz$position_bin = df_long_trimz$position
+
 df_long_trimz %>%
   dplyr::filter(as.numeric(id) <= 10) %>%
   ggplot()+
@@ -147,6 +153,7 @@ df_long_trimz %>%
 df_long_trimz %>%
   group_by(id, coordinate, time_lores, condition) %>%
   dplyr::summarise(position_bin_avg = mean(position_bin)) -> df_id_meansz
+
 df_id_meansz %>%
   ggplot()+
   geom_line(aes(x=time_lores, y=position_bin_avg, color = id), alpha = 0.5)+
@@ -165,6 +172,7 @@ df_id_meansz %>%
 df_id_meansz %>%
   group_by(coordinate, time_lores, condition) %>%
   dplyr::summarise(position_bin_grand_avg = mean(position_bin_avg)) -> df_condition_meansz
+
 df_condition_meansz %>%
   ggplot()+
     geom_line(aes(x=time_lores, y=position_bin_grand_avg, color = condition))+
@@ -307,7 +315,7 @@ data_for_stan = list(
 )
 
 # # package for googleComputeEngine
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_stan_data_proposal_noshift.Rdata")
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_stan_data_proposal.Rdata")
 
 # # # see cluster_analysis
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
@@ -340,7 +348,7 @@ data_for_stan = list(
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_proposal_post_500_noshift.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_proposal_post_500_noprepro.rdata")
 
 
 
@@ -465,6 +473,7 @@ gg_volatilities+
   geom_segment(aes(x = 1.5, y = 1.31, xend = 2.5, yend = 1.31), linetype = 'dotted', size = 0.5)
 
 # displacement amplitude
+# NOTE: this amplitude will be drastically underestimated because the data were scaled, centered at zero
 amplitudes = data.frame(post_samples$amplitude)
 names(amplitudes) = c("condition1", "condition2")
 amplitudes %>%
@@ -491,6 +500,7 @@ gg_volatility_sds+
 
 
 # participant displacement amplitude sd
+# NOTE: these will also be underestimated because of the scaling
 subj_amplitude_sds = data.frame(post_samples$subj_amplitude_sd)
 names(subj_amplitude_sds) = c("condition1", "condition2")
 subj_amplitude_sds %>%
@@ -510,10 +520,12 @@ noise_volatilities %>%
 
 gg_noise_volatilities = get_violin(noise_volatilities, "noise volatility")
 
-# these are way off!
+# NOTE: these posterior distributions would make much more sense on the log scale
 gg_noise_volatilities+
   geom_segment(aes(x = 0.5, y = 0.45, xend = 1.5, yend = 0.45), linetype = 'dotted', size = 0.5)+
-  geom_segment(aes(x = 1.5, y = 0.51, xend = 2.5, yend = 0.51), linetype = 'dotted', size = 0.5)
+  geom_segment(aes(x = 1.5, y = 0.51, xend = 2.5, yend = 0.51), linetype = 'dotted', size = 0.5)+
+  scale_y_log10()
+# +ylim(c(0,5))
 
 
 # noise amplitude
@@ -524,7 +536,7 @@ noise_amplitudes %>%
 
 gg_noise_amplitudes = get_violin(noise_amplitudes, "noise amplitude")
 
-# these are way off!
+# NOTE: the scaling will affect this I believe!
 gg_noise_amplitudes+
   geom_segment(aes(x = 0.5, y = 0.50, xend = 1.5, yend = 0.50), linetype = 'dotted', size = 0.5)+
   geom_segment(aes(x = 1.5, y = 0.60, xend = 2.5, yend = 0.60), linetype = 'dotted', size = 0.5)
@@ -624,7 +636,7 @@ subj_to_plot = subj_f_sum %>%
   )
 
 # load real population means 
-df_subj = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_subj.rds")
+df_subj = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal_subj.rds")
 df_subj %>%
   group_by(id, condition) %>%
   # dplyr::mutate(value = value - value[time == 0]) %>%
@@ -741,11 +753,12 @@ df_long_trimz %>%
   ) -> noise_df_long_trimz
 
 # get population parameters
-df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_subj_noise.rds")
+df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal_subj_noise.rds")
 df_subj_noise %>%
   spread(condition, value) -> df_subj_noise
 
-# I believe the binning has resulted in a lost in noise!
+# I believe the binning has resulted in a loss in noise!
+# also, it appears that scaling results in a loss in noise - which makes sense
 noise_subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
@@ -840,7 +853,7 @@ to_plot = f_sum %>%
   )
 
 # load real population means 
-df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_pop.rds")
+df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal_pop.rds")
 # # set to zero
 # df_pop %>%
 #   dplyr::mutate(
@@ -893,8 +906,8 @@ to_plot %>%
   geom_line(aes(x=time, y=med_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), color = "red")+
   geom_line(aes(x=time, y=hi95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "red")+
   geom_line(aes(x=time, y=lo95_2*sd(df_long_trimz$position_bin)+mean(df_long_trimz$position_bin)), linetype = "dashed", color = "red")+
-  annotate("text", label = "condition 1", x = 3, y = -0.75, color = "turquoise")+
-  annotate("text", label = "condition 2", x = 4, y = -1.75, color = "red")+
+  annotate("text", label = "condition 1", x = 3, y = -0.50, color = "turquoise")+
+  annotate("text", label = "condition 2", x = 7, y = -0.1, color = "red")+
   ylab('position')+
   xlab('time')+
   theme_gray(base_size = 20)+
@@ -963,7 +976,7 @@ noise_df_long_trimz %>%
   ) -> subj_noise
 
 # load real population means
-df_pop_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal/fake_data_proposal_pop_noise.rds")
+df_pop_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noprepro/fake_data_proposal_pop_noise.rds")
 
 noise_to_plot %>%
   ggplot()+
@@ -1012,7 +1025,7 @@ noise_to_plot %>%
   geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
   ylab('log standard deviation')+
   xlab('time')+
-  annotate("text", label = "condition 1", x = 3, y = -1.25, color = "turquoise")+
+  annotate("text", label = "condition 1", x = 3, y = 0.05, color = "turquoise")+
   annotate("text", label = "condition 2", x = 9, y = -0.20, color = "red")+
   theme_gray(base_size = 20)+
   theme(
