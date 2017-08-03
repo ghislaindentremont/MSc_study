@@ -220,8 +220,8 @@ model {
 	# - population GPs have volatility ~ cauchy(0,10)
 	# - per-subject GPs have subj_volatility ~ cauchy(0,subj_volatility_sd)
 	# - subj_volatility pooled via subj_volatility_sd
-	noise_subj_volatility_sd ~ weibull(2,10) ; #peaked around 8
-	subj_volatility_sd ~ weibull(2,10) ; #peaked around 8
+	noise_subj_volatility_sd ~ weibull(2,1) ; #peaked around 0.8
+	subj_volatility_sd ~ weibull(2,1) ; #peaked around 0.8
 
 	# amplitude priors
 	# - population GPs have amplitude as weibull peaked at .8
