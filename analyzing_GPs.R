@@ -12,7 +12,7 @@ source('~/Documents/Experiments/Trajectory/GP Demos/Mike Demos/gp_example/prep_x
 
 # load a function to do some pre-computation on x
 # load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/data_trim.Rdata")
-df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal.rds")
+df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal.rds")
 
 # Look at Data ----
 summary(df_long_trim)
@@ -114,7 +114,7 @@ df_long_trim %>%
 # }
 # will the trajectories be good enough with this low-resolution?
 # I average over bin to make analysis compute time reasonable
-bin_width = 0.1
+bin_width = 1/15
 # df_long_trimz$time_lores = round0(df_long_trimz$time, bin_width)
 
 # no binning 
@@ -205,15 +205,15 @@ curve(dnorm(x, 0, mean(rweibull(1000, 2, 1))), 0, 5, ylab = "density", xlab = "s
 curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "population amplitude")
 
 # trajectory time points
-x = seq(0, 1, 0.01) #0.1)
+x = seq(0, 1, 0.001) #0.1)
 n_x = length(x)
 
 # mean function
 mu = rep(0, n_x)
 
 # covariance matrix with hyperparameters
-amplitudes = 1
-volatilities = 5  # not any bigger than this
+amplitudes = 5
+volatilities = 15  # not any bigger than this
 
 Sigmas = matrix(0, n_x, n_x)
 for (i in 1:n_x){
@@ -235,7 +235,7 @@ fs_df %>%
     geom_line(aes(x=time, y=position, color=sample), size = 2)+  
     # xlab('time')+
     # ylab('position')+
-    ggtitle('volatility=5; amplitude=1')+
+    # ggtitle('volatility=5; amplitude=1')+
     ylim(c(-12, 12))+
     theme_gray(base_size = 20)+
     theme(
@@ -315,8 +315,8 @@ data_for_stan = list(
   , subj_obs = subj_obs
 )
 
-# # package for googleComputeEngine
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_stan_data_proposal.Rdata")
+# # package for cluster
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_stan_data_proposal.Rdata")
 
 # # # see cluster_analysis
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
@@ -349,7 +349,7 @@ data_for_stan = list(
 # Examine Results ----
 # load stan fit object that was computed in the cloud
 # I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_proposal_post_500_noscaling.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_proposal_post_500_15.rdata")
 
 
 
@@ -471,10 +471,9 @@ gg_volatilities = get_violin(volatilities, "volatility")
 
 gg_volatilities+ 
   geom_segment(aes(x = 0.5, y = 1.12, xend = 1.5, yend = 1.12), linetype = 'dotted', size = 0.5)+ 
-  geom_segment(aes(x = 1.5, y = 1.51, xend = 2.5, yend = 1.51), linetype = 'dotted', size = 0.5)
+  geom_segment(aes(x = 1.5, y = 2.51, xend = 2.5, yend = 2.51), linetype = 'dotted', size = 0.5)
 
 # displacement amplitude
-# NOTE: this amplitude will be drastically underestimated because the data were scaled, centered at zero
 amplitudes = data.frame(post_samples$amplitude)
 names(amplitudes) = c("condition1", "condition2")
 amplitudes %>%
@@ -496,12 +495,11 @@ subj_volatility_sds %>%
 gg_volatility_sds = get_violin(subj_volatility_sds, "participant volatility sd")
 
 gg_volatility_sds+
-  geom_segment(aes(x = 0.5, y = 0.91, xend = 1.5, yend = 0.91), linetype = 'dotted', size = 0.5)+
-  geom_segment(aes(x = 1.5, y = 1.34, xend = 2.5, yend = 1.34), linetype = 'dotted', size = 0.5)
+  geom_segment(aes(x = 0.5, y = 0.71, xend = 1.5, yend = 0.71), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 1.14, xend = 2.5, yend = 1.14), linetype = 'dotted', size = 0.5)
 
 
 # participant displacement amplitude sd
-# NOTE: these will also be underestimated because of the scaling
 subj_amplitude_sds = data.frame(post_samples$subj_amplitude_sd)
 names(subj_amplitude_sds) = c("condition1", "condition2")
 subj_amplitude_sds %>%
@@ -522,8 +520,8 @@ noise_volatilities %>%
 gg_noise_volatilities = get_violin(noise_volatilities, "noise volatility")
 
 gg_noise_volatilities+
-  geom_segment(aes(x = 0.5, y = 0.45, xend = 1.5, yend = 0.45), linetype = 'dotted', size = 0.5)+
-  geom_segment(aes(x = 1.5, y = 0.81, xend = 2.5, yend = 0.81), linetype = 'dotted', size = 0.5)
+  geom_segment(aes(x = 0.5, y = 0.85, xend = 1.5, yend = 0.85), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 1.81, xend = 2.5, yend = 1.81), linetype = 'dotted', size = 0.5)
 # +scale_y_log10()
 # +ylim(c(0,5))
 
@@ -538,8 +536,8 @@ gg_noise_amplitudes = get_violin(noise_amplitudes, "noise amplitude")
 
 # NOTE: the scaling will affect this I believe!
 gg_noise_amplitudes+
-  geom_segment(aes(x = 0.5, y = 0.60, xend = 1.5, yend = 0.60), linetype = 'dotted', size = 0.5)+
-  geom_segment(aes(x = 1.5, y = 0.90, xend = 2.5, yend = 0.90), linetype = 'dotted', size = 0.5)
+  geom_segment(aes(x = 0.5, y = 1.0, xend = 1.5, yend = 1.0), linetype = 'dotted', size = 0.5)+
+  geom_segment(aes(x = 1.5, y = 1.0, xend = 2.5, yend = 1.0), linetype = 'dotted', size = 0.5)
 
 # participant noise volatilty sd
 noise_subj_volatility_sds = data.frame(post_samples$noise_subj_volatility_sd)
@@ -636,7 +634,7 @@ subj_to_plot = subj_f_sum %>%
   )
 
 # load real population means 
-df_subj = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal_subj.rds")
+df_subj = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_subj.rds")
 df_subj %>%
   group_by(id, condition) %>%
   # dplyr::mutate(value = value - value[time == 0]) %>%
@@ -753,7 +751,7 @@ df_long_trimz %>%
   ) -> noise_df_long_trimz
 
 # get population parameters
-df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal_subj_noise.rds")
+df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_subj_noise.rds")
 df_subj_noise %>%
   spread(condition, value) -> df_subj_noise
 
@@ -853,7 +851,7 @@ to_plot = f_sum %>%
   )
 
 # load real population means 
-df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal_pop.rds")
+df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_pop.rds")
 # # set to zero
 # df_pop %>%
 #   dplyr::mutate(
@@ -906,8 +904,8 @@ to_plot %>%
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
   geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
-  annotate("text", label = "condition 1", x = 3, y = -0.75, color = "turquoise")+
-  annotate("text", label = "condition 2", x = 9, y = -2.5, color = "red")+
+  annotate("text", label = "condition 1", x = 3, y = -0.15, color = "turquoise")+
+  annotate("text", label = "condition 2", x = 9, y = -1.25, color = "red")+
   ylab('position')+
   xlab('time')+
   theme_gray(base_size = 20)+
@@ -976,7 +974,7 @@ noise_df_long_trimz %>%
   ) -> subj_noise
 
 # load real population means
-df_pop_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal_pop_noise.rds")
+df_pop_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_pop_noise.rds")
 
 noise_to_plot %>%
   ggplot()+
@@ -1025,8 +1023,8 @@ noise_to_plot %>%
   geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
   ylab('log standard deviation')+
   xlab('time')+
-  annotate("text", label = "condition 1", x = 3, y = 0.05, color = "turquoise")+
-  annotate("text", label = "condition 2", x = 9, y = -0.40, color = "red")+
+  annotate("text", label = "condition 1", x = 3, y = -1.0, color = "turquoise")+
+  annotate("text", label = "condition 2", x = 5, y = 0.0, color = "red")+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)

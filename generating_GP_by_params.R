@@ -58,7 +58,7 @@ get_subj_Sigmas = function(subj_amplitude_sd, subj_volatility_sd, Sigmas){
 n = 20  # number of participants
 
 # trajectory time points
-x = 0:10/10  # I make it 0 to 1 so that amplitudes and volatilities are on the right scale
+x = 0:15/15  # I make it 0 to 1 so that amplitudes and volatilities are on the right scale
 n_x = length(x)
 
 # mean function
@@ -74,15 +74,15 @@ curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "population amplitude")
 amplitudes = c(0.80, 1.35)
 # volatilities
 curve(dcauchy(x, 0, 10), 0, 50, ylab = "density", xlab = "population volatility")
-volatilities = c(1.12, 1.51)
+volatilities = c(1.12, 2.51)
 
 Sigmas = get_Sigmas(amplitudes, volatilities)
 
 
 # Group GPs for Noise ----
 # same priors
-namplitudes = c(0.60, 0.90)
-nvolatilities = c(0.45, 0.81)
+namplitudes = c(1.0, 1.0)
+nvolatilities = c(0.85, 1.81)
 
 nSigmas = get_Sigmas(namplitudes, nvolatilities)
 
@@ -94,7 +94,7 @@ curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "subject amplitude sd")
 subj_amplitude_sd = c(0.53, 0.43)
 # volatility
 curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "subject volatility sd")
-subj_volatility_sd = c(0.91, 1.34)
+subj_volatility_sd = c(0.71, 1.14)
 
 temp = get_subj_Sigmas(subj_amplitude_sd, subj_volatility_sd, Sigmas)
 fs = temp$fs
@@ -118,7 +118,7 @@ df %>%
   theme(legend.position="none")
 
 # save generative function (f(x))
-saveRDS(df, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal_subj.rds")
+saveRDS(df, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_subj.rds")
 
 # population
 df_pop = do.call(cbind, fs)
@@ -136,7 +136,7 @@ df_pop %>%
   facet_grid(condition~.)
 
 # save generative function (f(x))
-saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal_pop.rds")
+saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_pop.rds")
 
 
 
@@ -168,7 +168,7 @@ df_noise %>%
   theme(legend.position="none")
 
 # save generative function (f(x))
-saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal_subj_noise.rds")
+saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_subj_noise.rds")
 
 # population
 df_noise_pop = do.call(cbind, fs_noise)
@@ -186,7 +186,7 @@ df_noise_pop %>%
   facet_grid(condition~.)
 
 # same generative function (f(x))
-saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal_pop_noise.rds")
+saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_pop_noise.rds")
 
 
 
@@ -234,4 +234,4 @@ names(df_final)[5] = c("position")
 df_final$coordinate = factor("z")
 
 # Save File ----
-saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_noscaling/fake_data_proposal.rds")
+saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal.rds")

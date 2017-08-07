@@ -41,6 +41,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'fake_proposal_post_500_noprepro.rdata'
+  , file = 'fake_proposal_post_500_15.rdata'
 )
 
