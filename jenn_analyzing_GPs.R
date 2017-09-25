@@ -1,172 +1,146 @@
 # Load Pakages & Data ----
-
 library(tidyverse)
 library(rstan)
-library(ezStan)
 library(MASS)
 library(reshape2)
 
 rstan_options(auto_write = TRUE) 
 
 # load a function to do some pre-computation on x
-source('~/Documents/Experiments/Trajectory/GP Demos/Mike Demos/gp_example/prep_x.R')
-
-# load in the data
-df_long_trim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal.rds")
+load("~/Documents/Experiments/Trajectory/Jenn Study/jenn_data/data_norm.Rdata")
 
 
 
-# Look at Data ----
+# Examine Data ----
+summary(df_long_clean)
 
-#  summarize dataset
-summary(df_long_trim)
+head(df_long_clean)
 
-# look at a few rows of dataset
-head(df_long_trim)
 
-# # set trial start to zero (for real data)
-# df_long_trim %>%
-#   group_by(id, trial, condition, coordinate) %>%
-#   dplyr::mutate(position = position - position[time == 0]) -> df_long_trim
 
-# plot participant data, for each trial
-df_long_trim %>%
-  dplyr::filter(as.numeric(id) <= 10, coordinate == "z") %>%
+# Visualize Data ----
+
+# look at trial by trial for given coordinate and participant
+df_long_clean %>%
+  dplyr::filter(coordinate == "z", as.numeric(id) == 1) %>%
   ggplot()+
-  geom_line(aes(x=time, y=position, color=trial), alpha = 0.2)+
-  facet_grid(id~condition)+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , legend.position = "none"
-    , panel.background = element_rect(fill = "white") 
-    , axis.ticks = element_blank()
-    , axis.text = element_blank()
-  )
-df_long_trim %>%
-  dplyr::filter(as.numeric(id) > 10, coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=time, y=position, color=trial), alpha = 0.2)+
-  facet_grid(id~condition)+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , legend.position = "none"
-    , panel.background = element_rect(fill = "white")
-    , axis.ticks = element_blank()
-    , axis.text = element_blank()
-  )
+  geom_line(aes(x=frame, y=position, color = trial), alpha = 0.5)+
+  xlab("normalized time")+
+  ylab("position (x)")+
+  facet_grid(.~target)+
+  theme(legend.position = "none")
 
-# average over trials
-df_long_trim %>%
-  group_by(id, coordinate, time, condition) %>%
+# we average over trials
+df_long_clean %>%
+  group_by(id, coordinate, target, cue, frame) %>%
   dplyr::summarise(
     position_avg = mean(position)
-  ) -> df_id_means
+  ) -> df_long_avg
 
-# plot participant mean trajectories 
-df_id_means %>%
-  filter(coordinate == "z") %>%
+df_long_avg %>%
+  dplyr::filter(coordinate == "x") %>%
   ggplot()+
-  geom_line(aes(x=time, y=position_avg, color = id), alpha = 0.5)+
-  facet_grid(.~condition)+
-  ylab('average position')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , legend.position = "none"
-    , panel.background = element_rect(fill = "white", color = "black")
-  )
+  geom_line(aes(x=frame, y=position_avg, color = id))+
+  xlab("normalized time")+
+  ylab("position (x)")+
+  facet_grid(cue~target)
 
-# average over participants
-df_id_means %>%
-  group_by(coordinate, time, condition) %>%
-  dplyr::summarize(
+df_long_avg %>%
+  dplyr::filter(coordinate == "y") %>%
+  ggplot()+
+  geom_line(aes(x=frame, y=position_avg, color = id))+
+  xlab("normalized time")+
+  ylab("position (y)")+
+  facet_grid(cue~target)
+
+df_long_avg %>%
+  dplyr::filter(coordinate == "z") %>%
+  ggplot()+
+  geom_line(aes(x=frame, y=position_avg, color = id))+
+  xlab("normalized time")+
+  ylab("position (z)")+
+  facet_grid(cue~target)
+
+# now we average over participants
+df_long_avg %>%
+  group_by(coordinate, target, cue, frame) %>%
+  dplyr::summarise(
     position_grand_avg = mean(position_avg)
-  ) -> df_condition_means
+  ) -> df_long_grand_avg
 
-# plot population mean trajectories
-df_condition_means %>%
-  filter(coordinate == "z") %>%
+df_long_grand_avg %>%
+  dplyr::filter(coordinate == "x") %>%
   ggplot()+
-  geom_line(aes(x=time, y=position_grand_avg, color = condition))+
-  ylab('grand average position')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , legend.position = "none"
-    , panel.background = element_rect(fill = "white", color = "black")
-  )
+  geom_line(aes(x=frame, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (x)")+
+  facet_grid(.~target)
+
+df_long_grand_avg %>%
+  dplyr::filter(coordinate == "y") %>%
+  ggplot()+
+  geom_line(aes(x=frame, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (y)")+
+  facet_grid(.~target)
+
+df_long_grand_avg %>%
+  dplyr::filter(coordinate == "z") %>%
+  ggplot()+
+  geom_line(aes(x=frame, y=position_grand_avg, color = cue))+
+  xlab("time")+
+  ylab("position (z)")+
+  facet_grid(.~target)
+
+# now we do 2D in space
+df_long_grand_avg %>%
+  spread(coordinate, position_grand_avg) -> for_2D 
+
+for_2D %>%
+  ggplot()+
+  geom_line(aes(x=y, y=z, color = cue))+
+  xlab("y")+
+  ylab("z")+
+  facet_grid(.~target)
+
 
 
 
 # Binning Waveforms ----
+# first select only the z coordinates
+df_long_clean %>%
+  dplyr::filter(coordinate == "z") -> df_long_cleanz
 
-# select only a single coordinate for a given analysis
-df_long_trim %>%
-  dplyr::filter(coordinate == "z") -> df_long_trimz
+# rounding function
+round0 = function(x,z){
+  round(x/z,0)*z
+}
 
-# create rounding function
-# round0 = function(x,z){
-#   round(x/z,0)*z
-# }
+# I average over bin to make analysis compute time reasonable
+bin_width = 15
+df_long_cleanz$time_lores = round0(df_long_cleanz$frame, bin_width)
 
-# specify bin width
-bin_width = 1/15
+df_long_cleanz %>%
+  group_by(id, coordinate, trial, time_lores, target, cue) %>%  # this is important because it organizes by id
+  dplyr::summarise(position_bin = mean(position)) -> df_long_cleanz
 
-# # round time data given specified bin width 
-# df_long_trimz$time_lores = round0(df_long_trimz$time, bin_width)
-
-# define a new column if no binning is required (fake data)
-df_long_trimz$time_lores = df_long_trim$time
-
-# # bin the time axis and averaged over position values within a bin, within a trial
-# df_long_trimz %>% 
-#   group_by(id, coordinate, trial, time_lores, condition) %>%
-#   dplyr::summarise(position_bin = mean(position)) -> df_long_trimz
-
-# define a new column if no binning is required (fake data)
-df_long_trimz$position_bin = df_long_trimz$position
-
-# plot binned data
-# if not binned, then the data wiil be the same as above
-df_long_trimz %>%
-  dplyr::filter(as.numeric(id) <= 10) %>%
+# plot trial by trial for given participant
+df_long_cleanz %>%
+  dplyr::filter(as.numeric(id) == 1) %>%
   ggplot()+
   geom_line(aes(x=time_lores, y=position_bin, color=trial), alpha = 0.2)+
-  facet_grid(id~condition)+
+  facet_grid(cue~target)+
   theme(legend.position="none")
-df_long_trimz %>%
-  dplyr::filter(as.numeric(id) > 10) %>%
-  ggplot()+
-  geom_line(aes(x=time_lores, y=position_bin, color=trial), alpha = 0.2)+
-  facet_grid(id~condition)+
-  xlab('time')+
-  ylab('binned position')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , legend.position = "none"
-    , panel.background = element_rect(fill = "white")
-    , axis.ticks = element_blank()
-    , axis.text = element_blank()
-  )
 
-# averave over trials
-df_long_trimz %>%
-  group_by(id, coordinate, time_lores, condition) %>%
+# average over trials
+df_long_cleanz %>%
+  group_by(id, coordinate, time_lores, cue, target) %>%
   dplyr::summarise(position_bin_avg = mean(position_bin)) -> df_id_meansz
 
-# plot participant mean trajectories
 df_id_meansz %>%
   ggplot()+
   geom_line(aes(x=time_lores, y=position_bin_avg, color = id), alpha = 0.5)+
-  facet_grid(.~condition)+
+  facet_grid(cue~target)+
   xlab('time')+
   ylab('average binned position')+
   theme_gray(base_size = 20)+
@@ -179,15 +153,15 @@ df_id_meansz %>%
 
 # average over participants
 df_id_meansz %>%
-  group_by(coordinate, time_lores, condition) %>%
+  group_by(coordinate, time_lores, cue, target) %>%
   dplyr::summarise(position_bin_grand_avg = mean(position_bin_avg)) -> df_condition_meansz
 
-# plot population mean trajectories
 df_condition_meansz %>%
   ggplot()+
-    geom_line(aes(x=time_lores, y=position_bin_grand_avg, color = condition))+
+    geom_line(aes(x=time_lores, y=position_bin_grand_avg, color = cue))+
     xlab('time')+
     ylab('grand average binned position')+
+    facet_grid(.~target)+
     theme_gray(base_size = 20)+
     theme(
       panel.grid.major = element_line(size = 0)
@@ -197,45 +171,34 @@ df_condition_meansz %>%
     )
 
 
-
-# Visualize Priors ----
-
-# in this section, one is intended to play around around with prior distributions 
-# and also test different GP hyperparameters to see what sorts of GP samples are possible given those hyperparameters
-# ultimately the code of this section aids in specifying reasonable priors for the data in question
-
+# Establish Prior ----
+# volatility
 # subj_volatility_sd
 curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "subject volatility sd")
-
 # subj_volatility
-curve(dcauchy(x, 0, mean(rweibull(1000, 2, 1))), 0, 5, ylab = "density", xlab = "subject volatility")
-
+curve(dnorm(x, 0, mean(rweibull(1000, 2, 1))), 0, 5, ylab = "density", xlab = "subject volatility")
 # volatility
-curve(dcauchy(x, 0, 10), 0, 50, ylab = "density", xlab = "population volatility")
+curve(dnorm(x, 0, 5), 0, 20, ylab = "density", xlab = "population volatility")
 
+# amplitude
 # subj_amplitude_sd
 curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "subject amplitude sd")
-
 # subj_amplitude
 curve(dnorm(x, 0, mean(rweibull(1000, 2, 1))), 0, 5, ylab = "density", xlab = "subject amplitude")
-
 # amplitude
 curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "population amplitude")
 
 # trajectory time points
-x = seq(0, 1, 0.001) 
-
-# number of time points
+x = seq(0, 1, 0.1) 
 n_x = length(x)
 
 # mean function
 mu = rep(0, n_x)
 
-# covariance matrix hyperparameters
+# covariance matrix with hyperparameters
 amplitudes = 5
-volatilities = 15  
+volatilities = 5  # not any bigger than this
 
-# define covariance matrix
 Sigmas = matrix(0, n_x, n_x)
 for (i in 1:n_x){
   for (j in 1:n_x){
@@ -243,59 +206,46 @@ for (i in 1:n_x){
   }
 }
 
-# number of samples of GP with covariance defined above
+# # these approximately correspond to the peak of the prior
 n = 5
-
-# sample from GP
 fs = mvrnorm(n, mu, Sigmas)
-
-# transform to data frame
 fs_df = data.frame(t(fs))
-
-# reorganize data frame
 fs_df %>%
   gather(sample, position, 1:n, factor_key = T) -> fs_df
-
-# add arbitrary time column
 fs_df$time = rep(1:table(fs_df$sample)[[1]], n)
 
-# plot samples
 fs_df %>%
   ggplot()+
     geom_line(aes(x=time, y=position, color=sample), size = 2)+  
-    # xlab('time')+
-    # ylab('position')+
-    # ggtitle('volatility=5; amplitude=1')+
     ylim(c(-12, 12))+
     theme_gray(base_size = 20)+
     theme(
       panel.grid.major = element_line(size = 0)
       , panel.grid.minor = element_line(size = 0)
       , legend.position = "none"
-      , panel.background = element_rect(fill = "white")
-      , axis.ticks = element_blank()
-      , axis.text = element_blank()
-      , axis.title = element_blank()
+      # , panel.background = element_rect(fill = "white")
+      # , axis.ticks = element_blank()
+      # , axis.text = element_blank()
+      # , axis.title = element_blank()
     )
 
 
 
 # Rstan ----
-
 # get the sorted unique value for x
-x = sort(unique(df_long_trimz$time_lores))
+x = sort(unique(df_long_cleanz$time_lores))
 
-# for each value in df_long_trimz$time_lores, get its index x
-x_index = match(df_long_trimz$time_lores,x)
+# for each value in df_long_cleanz$x, get its index x
+x_index = match(df_long_cleanz$time_lores,x)
 
 # do something similar for the subjects 
-s = sort(unique(df_long_trimz$id))
-s_index = match(df_long_trimz$id, s)
+s = sort(unique(df_long_cleanz$id))
+s_index = match(df_long_cleanz$id, s)
 
 # compute the model matrix
 z = data.frame(
-  condition1 = ifelse(df_long_trimz$condition == "condition1", 1, 0)
-  , condition2 =ifelse(df_long_trimz$condition == "condition2", 1, 0)
+  condition1 = ifelse(df_long_cleanz$target == "0", 1, 0)
+  , condition2 =ifelse(df_long_cleanz$target == "1", 1, 0)
   )
 
 # compute the unique entries in the model matrix
@@ -310,44 +260,37 @@ z_unique_index = match(temp$combined,temp_unique$combined)
 # combine the two index objects to get the index into the flattened z_by_f vector
 z_by_f_index = z_unique_index + (x_index-1)*nrow(z_unique)
 
-# get one index object for each participant
 z_by_f_by_s = array(split(z_by_f_index, s_index))
 
-# specify number of observations for a given participant
 subj_obs = NULL
 for (si in 1:length(z_by_f_by_s)) {
   subj_obs = c(subj_obs, length(z_by_f_by_s[[si]]))
 }
 
-# create a padded version of the z_by_f_by_s object so that the entry for each participant has the same number of observations
-z_by_f_by_s_pad = array(0,dim=c(20,10000))
+maxi = max(data.frame(lapply(z_by_f_by_s, length)))
+
+z_by_f_by_s_pad = array(0,dim=c(length(subj_obs), maxi ))
 for (si in 1:length(subj_obs)) {
-  z_by_f_by_s_pad[si,] = c(z_by_f_by_s[[si]], rep(0, 10000 - subj_obs[si]))
+  z_by_f_by_s_pad[si,] = c(z_by_f_by_s[[si]], rep(0, maxi - subj_obs[si]))
 }
 
-# # if real data
-# y = scale(df_long_trimz$position_bin)[,1]  # scaled to mean=0,sd=1
-
-# if fake data
-y = df_long_trimz$position_bin
-
-# get data specific to each participant
+y = scale(df_long_cleanz$position_bin)[,1]  # scaled to mean=0,sd=1
 y_by_s = array(split(y, s_index))
 
-# pad that data
-y_by_s_pad = array(0,dim=c(20,10000))
+y_by_s_pad = array(0,dim=c(length(subj_obs),maxi))
 for (si in 1:length(subj_obs)) {
-  y_by_s_pad[si,] = c(y_by_s[[si]], rep(0, 10000 - subj_obs[si]))
+  y_by_s_pad[si,] = c(y_by_s[[si]], rep(0, maxi - subj_obs[si]))
 }
 
 # create the data list for stan
 data_for_stan = list(
-  n_y = nrow(df_long_trimz)
+  n_y = nrow(df_long_cleanz)
   , y = y_by_s_pad
   , n_x = length(x)
   , x = (x-min(x))/(max(x)-min(x)) #scaled to min=0,max=1
   , x_index = x_index
   , n_subj = length(s)
+  , maxi = maxi
   , n_z = ncol(z)
   , rows_z_unique = nrow(z_unique)
   , z_unique = z_unique
@@ -355,43 +298,42 @@ data_for_stan = list(
   , subj_obs = subj_obs
 )
 
-# # package for cluster
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_stan_data_proposal.Rdata")
+# package for cluster
+save(data_for_stan, file = "~/Documents/Experiments/Trajectory/Jenn Study/jenn_data/data_for_stan.Rdata")
 
-# # see 'cluster_analysis'
-# mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
-# post_test = sampling(
-#   mod
-#   , data = data_for_stan
-#   , iter = 100
-#   , init = 0
-#   , chains = 2
-#   , cores = 2
-#   , verbose = T
-#   , control = list(
-#     max_treedepth = 15
-#     , adapt_delta = 0.99 
-#     )
-#   , refresh = 1
-#   , include = F
-#   , pars = c(
-#     'f_normal01'
-#     , 'subj_f_normal01'
-#     , 'volatility_helper'
-#     , 'subj_volatility_helper'
-#     , 'noise_f_normal01'
-#     , 'noise_subj_f_normal01'
-#     , 'noise_volatility_helper'
-#     , 'noise_subj_volatility_helper'
-#   )
-# )
+# see cluster_analysis
+mod = rstan::stan_model("~/Documents/Experiments/Trajectory/Jenn Study/jenn_study/jenn_gp_regression.stan")
+post_test = sampling(
+  mod
+  , data = data_for_stan
+  , iter = 50
+  , init = 0
+  , chains = 4
+  , cores = 4
+  , verbose = T
+  , control = list(
+    max_treedepth = 12
+    , adapt_delta = 0.95
+    )
+  , refresh = 1
+  , include = F
+  , pars = c(
+    'f_normal01'
+    , 'subj_f_normal01'
+    , 'noise_f_normal01'
+    , 'noise_subj_f_normal01'
+  )
+)
 
 
 
 # Examine Results ----
-
 # load stan fit object that was computed in the cloud
+# I saved it as post_rt because I forgot to change the name from what was written down in Mike's version from which I adapted the code
 load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_proposal_post_500_15.rdata")
+
+# look at pairs
+pairs(post, pars = c("volatility", "noise_volatility", "amplitude", "noise_amplitude"))
 
 
 
@@ -402,37 +344,33 @@ load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/prev
 # how long did it take (in hours)?
 sort(rowSums(get_elapsed_time(post)/60/60))
 
-# population hyperparameter estimates
 ezStan::stan_summary(
   from_stan = post
   , par = c('volatility','amplitude', 'noise_volatility', 'noise_amplitude')
 )
 
-# participant-to-participant variability estimates
 ezStan::stan_summary(
   from_stan = post
   , par = c('subj_volatility_sd','subj_amplitude_sd', 'noise_subj_volatility_sd','noise_subj_amplitude_sd')
 )
 
-# population mean function
+# condition samples 
 ezStan::stan_summary(
   from_stan = post
   , par = c('f')
 )
 
-# population noise function
 ezStan::stan_summary(
   from_stan = post
   , par = c('noise_f')
 )
 
-# participant mean functions
+# look at subject-by-subject estimates
 ezStan::stan_summary(
   from_stan = post
   , par = c('subj_f')
 )
 
-# participant noise functions
 ezStan::stan_summary(
   from_stan = post
   , par = c('noise_subj_f')
@@ -444,15 +382,10 @@ ezStan::stan_summary(
 ####                 Violins                                   ####
 ###################################################################
 
-
-
 # Functions ----
-
-# load a few handy packages
 library(rstan)
 library(coda)
-
-# highest density interval functions (HDIs)
+# Highest Density Interval Functions
 get_95_HDI = function(y) {
   HDI = HPDinterval( as.mcmc( as.vector(y) ), prob = .95 )
   # Den = density( as.vector(y) )
@@ -510,13 +443,9 @@ get_violin = function(df, y_lab, samps = 16*500/2, hline = FALSE, facet = FALSE)
 }
 
 
-
-# Parameters ----
-
-# extract posterior samples 
 post_samples = rstan::extract(post)
 
-# population mean volatilty
+# displacement volatilty
 volatilities = data.frame(post_samples$volatility)
 names(volatilities) = c("condition1", "condition2")
 volatilities %>%
@@ -528,7 +457,7 @@ gg_volatilities+
   geom_segment(aes(x = 0.5, y = 1.12, xend = 1.5, yend = 1.12), linetype = 'dotted', size = 0.5)+ 
   geom_segment(aes(x = 1.5, y = 2.51, xend = 2.5, yend = 2.51), linetype = 'dotted', size = 0.5)
 
-# population mean amplitude
+# displacement amplitude
 amplitudes = data.frame(post_samples$amplitude)
 names(amplitudes) = c("condition1", "condition2")
 amplitudes %>%
@@ -540,7 +469,8 @@ gg_amplitudes+
   geom_segment(aes(x = 0.5, y = 0.80, xend = 1.5, yend = 0.80), linetype = 'dotted', size = 0.5)+
   geom_segment(aes(x = 1.5, y = 1.35, xend = 2.5, yend = 1.35), linetype = 'dotted', size = 0.5)
 
-# participant mean volatilty sd
+
+# participant displacement volatilty sd
 subj_volatility_sds = data.frame(post_samples$subj_volatility_sd)
 names(subj_volatility_sds) = c("condition1", "condition2")
 subj_volatility_sds %>%
@@ -553,7 +483,7 @@ gg_volatility_sds+
   geom_segment(aes(x = 1.5, y = 1.14, xend = 2.5, yend = 1.14), linetype = 'dotted', size = 0.5)
 
 
-# participant mean amplitude sd
+# participant displacement amplitude sd
 subj_amplitude_sds = data.frame(post_samples$subj_amplitude_sd)
 names(subj_amplitude_sds) = c("condition1", "condition2")
 subj_amplitude_sds %>%
@@ -565,7 +495,7 @@ gg_amplitude_sds+
   geom_segment(aes(x = 0.5, y = 0.53, xend = 1.5, yend = 0.53), linetype = 'dotted', size = 0.5)+
   geom_segment(aes(x = 1.5, y = 0.43, xend = 2.5, yend = 0.43), linetype = 'dotted', size = 0.5)
 
-# population noise volatilty
+# noise volatilty
 noise_volatilities = data.frame(post_samples$noise_volatility)
 names(noise_volatilities) = c("condition1", "condition2")
 noise_volatilities %>%
@@ -579,7 +509,8 @@ gg_noise_volatilities+
 # +scale_y_log10()
 # +ylim(c(0,5))
 
-# population noise amplitude
+
+# noise amplitude
 noise_amplitudes = data.frame(post_samples$noise_amplitude)
 names(noise_amplitudes) = c("condition1", "condition2")
 noise_amplitudes %>%
@@ -587,6 +518,7 @@ noise_amplitudes %>%
 
 gg_noise_amplitudes = get_violin(noise_amplitudes, "noise amplitude")
 
+# NOTE: the scaling will affect this I believe!
 gg_noise_amplitudes+
   geom_segment(aes(x = 0.5, y = 1.0, xend = 1.5, yend = 1.0), linetype = 'dotted', size = 0.5)+
   geom_segment(aes(x = 1.5, y = 1.0, xend = 2.5, yend = 1.0), linetype = 'dotted', size = 0.5)
@@ -617,22 +549,17 @@ gg_noise_amplitude_sds+
 
 
 
-
-
 ###################################################################
 ####                 Subject Level                             ####
 ###################################################################
 
-
-# Mean ----
-
-# extract samples
+# Position ----
 subj_f = rstan::extract(
   post
   , pars = 'subj_f'
 )[[1]]
 
-# condition 1
+# intercept
 subj_condition1 = NULL
 for (si in 1:dim(subj_f)[2]) {
   temp = data.frame(subj_f[,si,,1])
@@ -705,7 +632,6 @@ subj_to_plot %>%
   geom_line(data = subset(df_id_meansz, condition == "condition1"), aes(x=time_lores/bin_width+1, y=position_bin_avg, group = id), size = 0.5, color = "gray50")+
   geom_line(data=df_subj, aes(x = time/bin_width+1, y = condition1, group = id), linetype = "longdash")+
   ylab('position')+
-  ylim(c(-3, 2.5))+
   xlab('time')+ 
   ggtitle('condition 1')+
   theme_gray(base_size = 20)+
@@ -714,45 +640,8 @@ subj_to_plot %>%
     , panel.grid.minor = element_line(size = 0)
     , legend.position = "none"
     , panel.background = element_rect(fill = "white", color = "black")
-  ) ->p1
-print(p1)
+  )
 
-# figure out participant details
-p1cols = ggplot_build(p1)$data[[1]]
-
-# just pick one subject
-subj_to_plot %>%
-  group_by(id) %>%
-  dplyr::summarise(mins = min(med_1)) %>%
-  dplyr::summarise(idx = which.min(mins))
-
-subj_to_plot %>%
-  dplyr::filter(id == 11, time >=8, time <=10) -> subj_to_plot_11
-
-p1cols %>%
-  dplyr::filter(group ==11, x == 1)
-
-subj_to_plot_11 %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med_1), color = '#00BFC4', size = 2)+
-  geom_line(aes(x=time, y=hi95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-  geom_line(aes(x=time, y=lo95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-  geom_line(data = subset(df_id_meansz, condition == "condition1" & id == 11 & time_lores/bin_width+1 >=8 & time_lores/bin_width+1 <=10), aes(x=time_lores/bin_width+1, y=position_bin_avg, group = id), size = 2, color = "gray50")+
-  geom_line(data = subset(df_subj, id == 11 & time/bin_width+1 >= 8 & time/bin_width+1 <= 10), aes(x = time/bin_width+1, y = condition1, group = id), size = 2, linetype = "longdash")+
-  ylab('')+
-  xlab('')+ 
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , axis.ticks = element_line(size = 0)
-    , axis.text = element_blank()
-    , legend.position = "none"
-    , panel.border = element_rect(size = 2, fill = NA)
-    , panel.background = element_rect(fill = "white", color = "black")
-  ) 
-  
-# condition 2
 subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
@@ -761,7 +650,6 @@ subj_to_plot %>%
   geom_line(data = subset(df_id_meansz, condition == "condition2"), aes(x=time_lores/bin_width+1, y=position_bin_avg, group = id ),size = 0.5, color = "gray50")+
   geom_line(data=df_subj, aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash")+
   ylab('position')+
-  ylim(c(-5, 2.5))+
   xlab('time')+ 
   ggtitle('condition 2')+
   theme_gray(base_size = 20)+
@@ -770,49 +658,10 @@ subj_to_plot %>%
     , panel.grid.minor = element_line(size = 0)
     , legend.position = "none"
     , panel.background = element_rect(fill = "white", color = "black")
-  ) -> p2
-print(p2)
-
-# figure out participant details
-p2cols = ggplot_build(p2)$data[[1]]
-
-# just pick one subject
-subj_to_plot %>%
-  group_by(id) %>%
-  dplyr::summarise(mins = min(med_2)) %>%
-  dplyr::summarise(idx = which.min(mins))
-
-subj_to_plot %>%
-  dplyr::filter(id == 6, time >=1, time <=3) -> subj_to_plot_6
-
-p1cols %>%
-  dplyr::filter(group ==6, x == 1)
-
-subj_to_plot_6 %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med_2), color = '#7CAE00', size = 2)+
-  geom_line(aes(x=time, y=hi95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-  geom_line(aes(x=time, y=lo95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-  geom_line(data = subset(df_id_meansz, condition == "condition2" & id == 6 & time_lores/bin_width+1 >=1 & time_lores/bin_width+1 <=3), aes(x=time_lores/bin_width+1, y=position_bin_avg, group = id), size = 2, color = "gray50")+
-  geom_line(data = subset(df_subj, id == 6 & time/bin_width+1 >=1 & time/bin_width+1 <=3), aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash", size = 2)+
-  ylab('')+
-  xlab('')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , axis.ticks = element_line(size = 0)
-    , axis.text = element_blank()
-    , legend.position = "none"
-    , panel.border = element_rect(size = 2, fill = NA)
-    , panel.background = element_rect(fill = "white", color = "black")
-  ) 
+  )
 
 
-  
 # Noise ----
-
-# extract samples
 noise_subj_f = rstan::extract(
   post
   , pars = 'noise_subj_f'
@@ -877,25 +726,27 @@ noise_subj_to_plot = noise_subj_f_sum %>%
   )
 
 # get SDs
-df_long_trimz$position_bin_scaled = df_long_trimz$position_bin
+df_long_cleanz$position_bin_scaled = df_long_cleanz$position_bin
 
-df_long_trimz %>%
-  group_by(id, time_lores, condition) %>%
+df_long_cleanz %>%
+  group_by(id, time_lores, target) %>%
   dplyr::summarise(
     SD = log(sd(position_bin_scaled))
-  ) -> noise_df_long_trimz
+  ) -> noise_df_long_cleanz
 
 # get population parameters
 df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_subj_noise.rds")
 df_subj_noise %>%
   spread(condition, value) -> df_subj_noise
 
+# I believe the binning has resulted in a loss in noise!
+# also, it appears that scaling results in a loss in noise - which makes sense
 noise_subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_trimz, condition == "condition1"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
+  geom_line(data = subset(noise_df_long_cleanz, condition == "condition1"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
   geom_line(data=df_subj_noise, aes(x = time/bin_width+1, y = condition1, group = id), linetype = "longdash")+
   ylab('log standard deviation')+
   xlab('time')+
@@ -913,7 +764,7 @@ noise_subj_to_plot %>%
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_trimz, condition == "condition2"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
+  geom_line(data = subset(noise_df_long_cleanz, condition == "condition2"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
   geom_line(data=df_subj_noise, aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash")+
   ylab('log standard deviation')+
   xlab('time')+
@@ -928,16 +779,11 @@ noise_subj_to_plot %>%
 
 
 
+###################################################################
+####                 Population Level                          ####
+###################################################################
 
-
-#-----------------------------------------------------------------#
-####                  Population Level                         ####
-#-----------------------------------------------------------------#
-
-
-# Mean ----
-
-# extract samples
+# Position ----
 f = rstan::extract(
   post
   , pars = 'f'
@@ -990,8 +836,7 @@ to_plot = f_sum %>%
 
 # load real population means 
 df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_pop.rds")
-
-# # if real data, then set to zero
+# # set to zero
 # df_pop %>%
 #   dplyr::mutate(
 #     condition1 = condition1 - condition1[time == 0]
@@ -1055,7 +900,6 @@ to_plot %>%
   )
 
 
-
 # Noise ----
 noise_f = rstan::extract(
   post
@@ -1107,7 +951,7 @@ noise_to_plot = noise_f_sum %>%
     , hi50_2 = quantile(condition2,.75)
   )
 
-noise_df_long_trimz %>%
+noise_df_long_cleanz %>%
   group_by(time_lores, condition) %>%
   dplyr::summarise(
     avg_SD = mean(SD)

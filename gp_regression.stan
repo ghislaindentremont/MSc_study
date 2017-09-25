@@ -1,15 +1,20 @@
-functions{ // This Stan file is largely cribbed from Mike Lawrence's GP examples
+functions{ # This Stan file is largely cribbed from Mike Lawrence's GP examples
+
 	# GP: computes noiseless Gaussian Process
 	vector GP(real volatility, real amplitude, vector normal01, int n_x, real[] x ) {
+	  
 		matrix[n_x,n_x] cov_mat ;
 		real amplitude_sq_plus_jitter ;
 		amplitude_sq_plus_jitter = amplitude^2 + 1e-6 ;
 		cov_mat = cov_exp_quad(x, amplitude, 1/volatility) ;
+		
 		for(i in 1:n_x){
 			cov_mat[i,i] = amplitude_sq_plus_jitter ;
 		}
+		
 		return(cholesky_decompose(cov_mat) * normal01 ) ;
 	}
+	
 }
 
 data {
@@ -20,18 +25,13 @@ data {
 	# n_subj: number of subjects
 	int n_subj ;
 
-	// # n_subj: vector indicating which subject is associated  with each y
-	// int<lower=1,upper=n_subj> subj[n_y] ;
-
-	# y: vector of observations for y
-	#	 should be scaled to mean=0,sd=1
+	# y: vector of observations for y; should be scaled to mean=0,sd=1
 	vector[10000] y[n_subj] ;
 
 	# n_x: number of unique x values
 	int n_x ;
 
-	# x: unique values of x
-	#	 should be scaled to min=0,max=1
+	# x: unique values of x; should be scaled to min=0,max=1
 	real x[n_x] ;
 
 	# x_index: vector indicating which x is associated zith each y
@@ -46,7 +46,7 @@ data {
 	# z_unique: predictor matrix (each column gets its own GP)
 	matrix[rows_z_unique,n_z] z_unique ;
 
-	# z_by_f_by_s_pad:
+	# z_by_f_by_s_pad: matrix containing function values for each participant
 	int z_by_f_by_s_pad[n_subj, 10000] ;
 	
 	# vector indicating the length of the GP index vector for each participant
@@ -56,12 +56,7 @@ data {
 
 parameters {
 	
-	// NOISE
-	// # subj_noise: noise per subject
-	// vector[n_subj] subj_noise ;
-	// 
-	// # subj_noise_sd: sd of subj_noise values
-	// real<lower=0> subj_noise_sd ;
+	// NOISE (Trial-wise variability)
 	# volatility_helper: helper for cauchy-distributed volatility (see transformed parameters)
 	vector<lower=0,upper=pi()/2>[n_z] noise_volatility_helper ;
 
@@ -87,7 +82,7 @@ parameters {
 	matrix[n_x, n_z] noise_subj_f_normal01[n_subj] ;
 	
 	
-  // DISPLACEMENT
+  // DISPLACEMENT (Trajectories)
 	# volatility_helper: helper for cauchy-distributed volatility (see transformed parameters)
 	vector<lower=0,upper=pi()/2>[n_z] volatility_helper ;
 
@@ -116,7 +111,7 @@ parameters {
 
 transformed parameters{
 
-  // NOISE
+  // NOISE (Trial-wise variability)
   # volatility: volatility of population GPs
 	vector[n_z] noise_volatility ;
 
@@ -130,7 +125,7 @@ transformed parameters{
 	matrix[n_x,n_z] noise_subj_f[n_subj] ;
 	
 	
-	// DISPLACEMENT
+	// DISPLACEMENT (Trajectories)
 	# volatility: volatility of population GPs
 	vector[n_z] volatility ;
 
@@ -143,7 +138,6 @@ transformed parameters{
 	# subj_f: per-subject GPs
 	matrix[n_x,n_z] subj_f[n_subj] ;
 	
-
 	#next line implies volatility ~ cauchy(0,10)
 	volatility = 10*tan(volatility_helper) ;
 
@@ -212,24 +206,25 @@ transformed parameters{
 
 model {
 
-	// # noise priors
-	// subj_noise_sd ~ weibull(2,1) ; #peaked at .8ish
-	// subj_noise ~ normal(0,subj_noise_sd) ;  #peaked at 0
-
 	# volatility priors:
 	# - population GPs have volatility ~ cauchy(0,10)
 	# - per-subject GPs have subj_volatility ~ cauchy(0,subj_volatility_sd)
 	# - subj_volatility pooled via subj_volatility_sd
+	
 	noise_subj_volatility_sd ~ weibull(2,1) ; #peaked around 0.8
 	subj_volatility_sd ~ weibull(2,1) ; #peaked around 0.8
+
 
 	# amplitude priors
 	# - population GPs have amplitude as weibull peaked at .8
 	# - per-subject GPs have amplitude as normal peaked at zero with pooled sd
+	
 	noise_amplitude ~ weibull(2,1) ; #peaked at .8ish
 	amplitude ~ weibull(2,1) ; #peaked at .8ish
+	
 	noise_subj_amplitude_sd ~ weibull(2,1) ;#peaked at .8ish
 	subj_amplitude_sd ~ weibull(2,1) ;#peaked at .8ish
+	
 	for(zi in 1:n_z){
 		subj_amplitude[zi] ~ normal(0,subj_amplitude_sd[zi]) ; #peaked at 0
 		noise_subj_amplitude[zi] ~ normal(0,noise_subj_amplitude_sd[zi]) ; #peaked at 0
@@ -238,6 +233,7 @@ model {
 	# normal(0,1) priors on GP helpers
 	to_vector(f_normal01) ~ normal(0,1);
 	to_vector(noise_f_normal01) ~ normal(0,1);
+	
 	for(si in 1:n_subj){
 		to_vector(subj_f_normal01[si]) ~ normal(0,1) ;
 		to_vector(noise_subj_f_normal01[si]) ~ normal(0,1) ;
@@ -245,12 +241,12 @@ model {
   
   # loop over observations
 	{
-		# subj_noise_exp: exponentiated subj_noise
-		// vector[n_subj] subj_noise_exp ;
+
+    # trajectory estimate for each participant
 		matrix[rows_z_unique,n_x] z_by_f[n_subj] ;
-		matrix[rows_z_unique,n_x] noise_z_by_f[n_subj] ;
 		
-		// subj_noise_exp = exp(subj_noise) ;
+		# noise estimate for each participant 
+		matrix[rows_z_unique,n_x] noise_z_by_f[n_subj] ;
 
 		for(i in 1:rows_z_unique){
 			for(j in 1:n_x){
@@ -260,12 +256,15 @@ model {
 			  }
 			}
 		}
+		
+		# likelihood
 		for(si in 1:n_subj) {
   		y[si,1:subj_obs[si]] ~ normal(
   			  to_vector(z_by_f[si])[z_by_f_by_s_pad[si,1:subj_obs[si]]]
   			, exp(to_vector(noise_z_by_f[si])[z_by_f_by_s_pad[si,1:subj_obs[si]]])
   		);
 		}
+		
 	}
 
 }
