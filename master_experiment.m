@@ -67,6 +67,7 @@ try
         age = 99;
         sex = 99;
         hand = 99; 
+        blocking_str = char(dems(5));
                 
         if isempty(blocking_str)~=1
             while (strcmp(blocking_str, 'v') ~= 1 && strcmp(blocking_str, 'n') ~= 1)
@@ -163,7 +164,7 @@ try
     %----------------------------------------------------------------------
 
     % Here we set the size of the arms of our fixation cross
-    FIX_CROSS_DIM_PIX = 5*2;
+    FIX_CROSS_DIM_PIX = 10*2;
 
     % Now we set the coordinates (these are all relative to zero we will let
     % the drawing routine center the cross in the center of our monitor for us)
@@ -172,7 +173,7 @@ try
     all_fix_coords = [x_fix_coords; y_fix_coords];
 
     % Set the line width for our fixation cross
-    LINE_WIDTH_PIX = 1;
+    LINE_WIDTH_PIX = 2;
  
     FIX_COLOR = [1 1 1];
     
@@ -240,11 +241,11 @@ try
         cond_matrix_shuffled = [itis];
         
         if strcmp(blocking_str, 'v')
-            first_condition = 'VISION'
-            second_condition = 'NO VISION'
+            first_condition = 'VISION';
+            second_condition = 'NO VISION';
         else
-            first_condition = 'NO VISION'
-            second_condition = 'VISION'
+            first_condition = 'NO VISION';
+            second_condition = 'VISION';
         end
         
         if block == 1
@@ -319,33 +320,72 @@ try
                     KbStrokeWait; 
                 end
             end
-
             
+            % waiting for finger to touch screen
+            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
+            vbl = Screen('Flip', window);
+            
+            % setting touch screen cursor variables
+            startbutton=1;
+            this=0;
+            that=0;
+            buttonstatus=[0 0 0];
+            
+            % detecting bottom screen press
+            while startbutton==1;
+               [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
+               if buttonstatus(1)==0; %status when button is not pressed
+                   startbutton=1;
+               elseif buttonstatus(1)==1 && that<900;  %status if it is pressed
+                   startbutton=1;
+               else
+                   startbutton=0;
+               end
+            end
+          
           
             %---------------------------- ITI -----------------------------
             iti = cond_matrix_shuffled(1,trial);
             iti_time_frames = round(iti / ifi / WAIT_FRAMES);
 
-            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter/8], 2);
+            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
             vbl = Screen('Flip', window);
 
             for frame = 1:iti_time_frames-1
-                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter/8], 2);
+                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
                 vbl = Screen('Flip', window, vbl + (WAIT_FRAMES - 0.5) * ifi);
             end
             %--------------------------------------------------------------
 
 
             %--------------------- Draw Target ----------------------------
-            Screen('DrawDots', window, [xCenter; yCenter*15/8], TARGET_SIZE, TARGET_COLOR, [], 2);
+            Screen('DrawDots', window, [xCenter; yCenter/8], TARGET_SIZE, TARGET_COLOR, [], 4);
+            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
             vbl = Screen('Flip', window);
             
-            for frame = 1:target_time_frames-1
-                Screen('DrawDots', window, [xCenter; yCenter*15/8], TARGET_SIZE, TARGET_COLOR, [], 2);
+            % setting touch screen cursor variables
+            startbutton=1;
+            this=0;
+            that=0;
+            buttonstatus=[0 0 0];
+            
+            % detecting bottom screen press
+            tic;
+            while startbutton==1 || toc<1;
+                Screen('DrawDots', window, [xCenter; yCenter/8], TARGET_SIZE, TARGET_COLOR, [], 4);
+                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
                 vbl = Screen('Flip', window, vbl + (WAIT_FRAMES - 0.5) * ifi);
+                
+               [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
+               if buttonstatus(1)==0; %status when button is not pressed
+                   startbutton=1;
+               elseif buttonstatus(1)==1 && that>900;  %status if it is pressed
+                   startbutton=1;
+               else
+                   startbutton=0;
+               end
             end
             %--------------------------------------------------------------
-
 
 
         end
