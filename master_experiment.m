@@ -219,6 +219,15 @@ try
     num_trials = NUM_EXPERIMENTAL_BLOCKS * TRIALS_PER_CONDITION + NUM_PRACTICE_BLOCKS * NUM_PRACTICE_TRIALS;
     
     
+    
+    %----------------------------------------------------------------------
+    %                       Occlusion Goggles
+    %----------------------------------------------------------------------
+    
+    % initiate goggles
+    PLATO_trial(1)
+    
+    
 
     %----------------------------------------------------------------------
     %                       Experimental Loop
@@ -369,7 +378,7 @@ try
             that=0;
             buttonstatus=[0 0 0];
             
-            % detecting bottom screen press
+            % detecting top screen press
             tic;
             while startbutton==1 || toc<1;
                 Screen('DrawDots', window, [xCenter; yCenter/8], TARGET_SIZE, TARGET_COLOR, [], 4);
@@ -379,10 +388,19 @@ try
                [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
                if buttonstatus(1)==0; %status when button is not pressed
                    startbutton=1;
+                   % occlude vision
+                   if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
+                       PLATO_lens(1, 0, 0)
+                   elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
+                       PLATO_lens(1, 0, 0)
+                   end
                elseif buttonstatus(1)==1 && that>900;  %status if it is pressed
                    startbutton=1;
                else
                    startbutton=0;
+                   % restore vision
+                   % this should be redundant for certain conditions
+                   PLATO_lens(0, 0, 0)
                end
             end
             %--------------------------------------------------------------
@@ -405,6 +423,9 @@ try
 %         % write response matrix to csv
 %         csvwrite(sprintf('C:/Users/Kine Research/Documents/MATLAB/ghis_data/raw_%s_p%i_%s_block_%i.csv', feedback_str, id, task_str, block), raw_mat);
         
+        % deactivate goggles
+        PLATO_trial(0)
+
     end
     
     % turn off screen
