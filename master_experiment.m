@@ -124,12 +124,12 @@ try
             disp('ERROR: handedness');  % should also get and error when putting in response matrix
         end  
 
-        if (strcmp(blocking_str, 'MI') == 1)
-            task = 1;
-        elseif (strcmp(blocking_str, 'ME') == 1)
-            task = 2;
+        if (strcmp(blocking_str, 'v') == 1)
+            blocking = 1;
+        elseif (strcmp(blocking_str, 'n') == 1)
+            blocking = 2;
         else
-            disp('ERROR: block condition');  % should also get and error when putting in response matrix
+            disp('ERROR: blocking condition');  % should also get and error when putting in response matrix
         end  
         
     end
@@ -239,6 +239,8 @@ try
     %----------------------------------------------------------------------
     %                       Experimental Loop
     %----------------------------------------------------------------------
+    
+    data_matrix = [];
 
     [pressed, firstPress]=KbQueueCheck; 
     
@@ -343,17 +345,17 @@ try
             
             % setting touch screen cursor variables
             startbutton=1;
-            this=0;
-            that=0;
+            xfix=0;
+            yfix=0;
             buttonstatus=[0 0 0];
             
             % detecting bottom screen press
             while startbutton==1;
-               [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
+               [xfix,yfix,buttonstatus]=GetMouse; %gets x and y position of mouse
                if buttonstatus(1)==0; %status when button is not pressed
                    startbutton=1;
                % status if it is pressed but beyond reasonable bounds
-               elseif buttonstatus(1)==1 && (that<FIX_Y_CENTERED-FIX_CROSS_DIM_PIX || that>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX || this<FIX_X_CENTERED-FIX_CROSS_DIM_PIX || this>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX);  
+               elseif buttonstatus(1)==1 && (yfix<FIX_Y_CENTERED-FIX_CROSS_DIM_PIX || yfix>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX || xfix<FIX_X_CENTERED-FIX_CROSS_DIM_PIX || xfix>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX);  
                    startbutton=1;
                % if button is pressed in proper area 
                else
@@ -383,17 +385,19 @@ try
             
             % setting touch screen cursor variables
             startbutton=1;
-            this=0;
-            that=0;
+            xtarget=0;
+            ytarget=0;
             buttonstatus=[0 0 0];
             
             % detecting top screen press
+            rt = 1.000;
             tic;
             while startbutton==1 && toc<TARGET_TIME;
-                
-               [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
+               [xtarget,ytarget,buttonstatus]=GetMouse; %gets x and y position of mouse
                if buttonstatus(1)==0; %status when button is not pressed
                    startbutton=1;
+                   % get reaction time 
+                   rt = toc;
                    % occlude vision
                    if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
                        PLATO_lens(1, 0, 0)
@@ -402,7 +406,7 @@ try
                    end
                % pressed but out of range   
                % the box is 'TARGET_Y_CENTERED' by 'TARGET_Y_CENTERED'
-               elseif buttonstatus(1)==1 && (that<TARGET_Y_CENTERED-TARGET_Y_CENTERED || that>TARGET_Y_CENTERED*2 || this<TARGET_X_CENTERED-TARGET_Y_CENTERED || this>TARGET_X_CENTERED+TARGET_Y_CENTERED);  
+               elseif buttonstatus(1)==1 && (ytarget<TARGET_Y_CENTERED-TARGET_Y_CENTERED || ytarget>TARGET_Y_CENTERED*2 || xtarget<TARGET_X_CENTERED-TARGET_Y_CENTERED || xtarget>TARGET_X_CENTERED+TARGET_Y_CENTERED);  
                    startbutton=1;
                % pressed and in range
                else
@@ -413,8 +417,21 @@ try
                end
             end
             %--------------------------------------------------------------
-
-
+            
+            
+            
+            % create long format data row for this trial
+            temp = [id age sex hand year month day hour minute seconds blocking task block trial iti blocking rt xfix yfix xtarget ytarget X_FIX_CENTERED Y_FIX_CENTERED X_FIX_TARGET Y_FIX_TARGET];
+            
+            % append data matrix
+            if trial == 1 && block == 1
+                data_matrix = temp;
+            else
+                data_matrix = [data_matrix; temp];
+            end
+                   
+            
+            
         end
         
         % collect raw data for an added amount of time to avoid
