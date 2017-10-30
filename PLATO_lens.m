@@ -33,7 +33,7 @@ clear reportArray(1)
 if both == 1
     
 
-     right = 0;
+    right = 0;
     left = 0;
     % Set the first byte of the report to "Trigger Both Lenses"
     reportArray(1) = 18;

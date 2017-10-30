@@ -20,7 +20,7 @@ try
 
     % Open an on screen window
     [window, window_rect] = PsychImaging('OpenWindow', screen_number, black);
-    % HideCursor(); 
+    HideCursor(); 
 
     % Get the size of the on screen window
     [screenXpixels, screenYpixels] = Screen('WindowSize', window);
@@ -163,8 +163,12 @@ try
     %                       Home Cross
     %----------------------------------------------------------------------
 
-    % Here we set the size of the arms of our fixation cross
-    FIX_CROSS_DIM_PIX = 10*2;
+    % Here we set the length of the arms (from center) of our fixation cross
+    FIX_CROSS_DIM_PIX = 20;
+    
+    % where do we want the fixation cross centered
+    FIX_X_CENTERED = xCenter;
+    FIX_Y_CENTERED = yCenter*15/8;
 
     % Now we set the coordinates (these are all relative to zero we will let
     % the drawing routine center the cross in the center of our monitor for us)
@@ -185,7 +189,11 @@ try
 
     TARGET_SIZE = 5;
     
-    TARGET_COLOR = [1 1 1];    
+    TARGET_COLOR = [1 1 1];  
+    
+    % where is the target centered?
+    TARGET_X_CENTERED = xCenter;
+    TARGET_Y_CENTERED = yCenter/8;
 
 
     
@@ -196,9 +204,8 @@ try
     % Numer of frames to wait before re-drawing
     WAIT_FRAMES = 1;
     
-    % Target time frames 
-    TARGET_TIME = 5;
-    target_time_frames = round(TARGET_TIME / ifi / WAIT_FRAMES);
+    % target time in seconds
+    TARGET_TIME = 2;
     
 
 
@@ -263,7 +270,7 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the the %s condition\n\n\nPress Spacebar To Begin the Block', first_condition),...
+            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nPress Spacebar To Begin the Block', first_condition),...
                 'center', 'center', white );
             Screen('Flip', window);
             KbStrokeWait; 
@@ -275,7 +282,7 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the the %s condition\n\n\nPress Spacebar To Begin the Block', first_condition),...
+            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nPress Spacebar To Begin the Block', first_condition),...
                 'center', 'center', white );
             Screen('Flip', window);
             KbStrokeWait; 
@@ -287,7 +294,7 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the the %s condition\n\n\nPress Spacebar To Begin the Block', second_condition),...
+            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nPress Spacebar To Begin the Block', second_condition),...
                 'center', 'center', white );
             Screen('Flip', window);
             KbStrokeWait; 
@@ -299,7 +306,7 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the the %s condition\n\n\nPress Spacebar To Begin the Block', second_condition),...
+            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nPress Spacebar To Begin the Block', second_condition),...
                 'center', 'center', white );
             Screen('Flip', window);
             KbStrokeWait; 
@@ -331,7 +338,7 @@ try
             end
             
             % waiting for finger to touch screen
-            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
+            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
             vbl = Screen('Flip', window);
             
             % setting touch screen cursor variables
@@ -345,8 +352,10 @@ try
                [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
                if buttonstatus(1)==0; %status when button is not pressed
                    startbutton=1;
-               elseif buttonstatus(1)==1 && that<900;  %status if it is pressed
+               % status if it is pressed but beyond reasonable bounds
+               elseif buttonstatus(1)==1 && (that<FIX_Y_CENTERED-FIX_CROSS_DIM_PIX || that>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX || this<FIX_X_CENTERED-FIX_CROSS_DIM_PIX || this>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX);  
                    startbutton=1;
+               % if button is pressed in proper area 
                else
                    startbutton=0;
                end
@@ -357,19 +366,19 @@ try
             iti = cond_matrix_shuffled(1,trial);
             iti_time_frames = round(iti / ifi / WAIT_FRAMES);
 
-            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
+            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
             vbl = Screen('Flip', window);
 
             for frame = 1:iti_time_frames-1
-                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
+                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                 vbl = Screen('Flip', window, vbl + (WAIT_FRAMES - 0.5) * ifi);
             end
             %--------------------------------------------------------------
 
 
             %--------------------- Draw Target ----------------------------
-            Screen('DrawDots', window, [xCenter; yCenter/8], TARGET_SIZE, TARGET_COLOR, [], 4);
-            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
+            Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
+            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
             vbl = Screen('Flip', window);
             
             % setting touch screen cursor variables
@@ -380,10 +389,7 @@ try
             
             % detecting top screen press
             tic;
-            while startbutton==1 || toc<1;
-                Screen('DrawDots', window, [xCenter; yCenter/8], TARGET_SIZE, TARGET_COLOR, [], 4);
-                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [xCenter yCenter*15/8], 2);
-                vbl = Screen('Flip', window, vbl + (WAIT_FRAMES - 0.5) * ifi);
+            while startbutton==1 && toc<TARGET_TIME;
                 
                [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
                if buttonstatus(1)==0; %status when button is not pressed
@@ -394,8 +400,11 @@ try
                    elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
                        PLATO_lens(1, 0, 0)
                    end
-               elseif buttonstatus(1)==1 && that>900;  %status if it is pressed
+               % pressed but out of range   
+               % the box is 'TARGET_Y_CENTERED' by 'TARGET_Y_CENTERED'
+               elseif buttonstatus(1)==1 && (that<TARGET_Y_CENTERED-TARGET_Y_CENTERED || that>TARGET_Y_CENTERED*2 || this<TARGET_X_CENTERED-TARGET_Y_CENTERED || this>TARGET_X_CENTERED+TARGET_Y_CENTERED);  
                    startbutton=1;
+               % pressed and in range
                else
                    startbutton=0;
                    % restore vision
@@ -422,11 +431,11 @@ try
         
 %         % write response matrix to csv
 %         csvwrite(sprintf('C:/Users/Kine Research/Documents/MATLAB/ghis_data/raw_%s_p%i_%s_block_%i.csv', feedback_str, id, task_str, block), raw_mat);
-        
-        % deactivate goggles
-        PLATO_trial(0)
-
+       
     end
+    
+    % deactivate goggles
+    PLATO_trial(0)
     
     % turn off screen
     sca;
