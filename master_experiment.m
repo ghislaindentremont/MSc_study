@@ -378,50 +378,94 @@ try
             %--------------------------------------------------------------
 
 
-            %--------------------- Draw Target ----------------------------
-            Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
-            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
-            vbl = Screen('Flip', window);
             
-            % setting touch screen cursor variables
-            startbutton=1;
-            xtarget=0;
-            ytarget=0;
-            buttonstatus=[0 0 0];
-            
-            % detecting top screen press
-            rt = 1.000;
-            tic;
-            while startbutton==1 && toc<TARGET_TIME;
-               [xtarget,ytarget,buttonstatus]=GetMouse; %gets x and y position of mouse
-               if buttonstatus(1)==0; %status when button is not pressed
-                   startbutton=1;
-                   % get reaction time 
-                   rt = toc;
-                   % occlude vision
-                   if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
-                       PLATO_lens(1, 0, 0)
-                   elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
-                       PLATO_lens(1, 0, 0)
-                   end
-               % pressed but out of range   
-               % the box is 'TARGET_Y_CENTERED' by 'TARGET_Y_CENTERED'
-               elseif buttonstatus(1)==1 && (ytarget<TARGET_Y_CENTERED-TARGET_Y_CENTERED || ytarget>TARGET_Y_CENTERED*2 || xtarget<TARGET_X_CENTERED-TARGET_Y_CENTERED || xtarget>TARGET_X_CENTERED+TARGET_Y_CENTERED);  
-                   startbutton=1;
-               % pressed and in range
-               else
-                   startbutton=0;
-                   % restore vision
-                   % this should be redundant for certain conditions
-                   PLATO_lens(0, 0, 0)
-               end
+            % make sure the finger is still on touching the screen before
+            % presenting target
+            [this,that,buttonstatus]=GetMouse;
+            if buttonstatus(1)==1 
+                
+                xtarget=NaN;
+                ytarget=NaN;
+                too_soon=1;
+                
+                Screen('TextSize', window, 36); 
+                DrawFormattedText(window, 'Too Soon! Wait for the target before starting your movement.',...
+                    'center', 'center', white );
+                Screen('Flip', window);
+                
+            else
+                
+                too_soon=0;
+                
+                %--------------------- Draw Target ----------------------------
+                Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
+                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                vbl = Screen('Flip', window);
+
+                % setting touch screen cursor variables
+                startbutton=1;
+                xtarget=0;
+                ytarget=0;
+                buttonstatus=[0 0 0];
+                movementstart=0;
+                
+                rt=1;
+
+                % detecting top screen press
+                tic;
+                while startbutton==1 && toc<TARGET_TIME;
+                   [xtarget,ytarget,buttonstatus]=GetMouse; %gets x and y position of mouse
+                   
+                   if toc>TARGET_TIME;
+                       too_late=1;
+                       startbutton=0
+                       response_time = NaN;
+                       if rt>=1
+                           rt=NaN;
+                       end
+                       
+                       Screen('TextSize', window, 36); 
+                       DrawFormattedText(window, 'Too Late! You need to reach the target faster.',...
+                            'center', 'center', white );
+                       Screen('Flip', window);
+                
+                   else
+                       if buttonstatus(1)==0 && movementstart==0; %status when button is not pressed
+                           startbutton=1;
+                           % get reaction time 
+                           rt = toc;
+                           % occlude vision
+                           if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
+                               PLATO_lens(1, 0, 0)
+                           elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
+                               PLATO_lens(1, 0, 0)
+                           end
+                           movementstart=1;
+                       % not pressed, but in movement
+                       elseif buttonstatus(1)==0 && movementstart~=0
+                           startbutton=1;
+                       % pressed but out of range   
+                       % the box is 'TARGET_Y_CENTERED' by 'TARGET_Y_CENTERED'
+                       elseif buttonstatus(1)==1 && (ytarget<TARGET_Y_CENTERED-TARGET_Y_CENTERED || ytarget>TARGET_Y_CENTERED*2 || xtarget<TARGET_X_CENTERED-TARGET_Y_CENTERED || xtarget>TARGET_X_CENTERED+TARGET_Y_CENTERED);  
+                           startbutton=1;
+                       % pressed and in range
+                       else
+                           too_late=0;
+                           startbutton=0;
+                           response_time = toc;
+                           % restore vision
+                           % this should be redundant for certain conditions
+                           PLATO_lens(0, 0, 0)
+                       end
+                   end 
+
+                end
+                %--------------------------------------------------------------
+                
             end
-            %--------------------------------------------------------------
-            
-            
             
             % create long format data row for this trial
-            temp = [id age sex hand year month day hour minute seconds blocking task block trial iti blocking rt xfix yfix xtarget ytarget X_FIX_CENTERED Y_FIX_CENTERED X_FIX_TARGET Y_FIX_TARGET];
+            temp = [id age sex hand year month day hour minute seconds blocking task block trial iti blocking rt response_time too_soon too_late xfix yfix xtarget ytarget];
             
             % append data matrix
             if trial == 1 && block == 1
@@ -429,9 +473,7 @@ try
             else
                 data_matrix = [data_matrix; temp];
             end
-                   
-            
-            
+
         end
         
         % collect raw data for an added amount of time to avoid
@@ -446,8 +488,8 @@ try
             end
         end
         
-%         % write response matrix to csv
-%         csvwrite(sprintf('C:/Users/Kine Research/Documents/MATLAB/ghis_data/raw_%s_p%i_%s_block_%i.csv', feedback_str, id, task_str, block), raw_mat);
+        % write response matrix to csv
+        csvwrite(sprintf('C:/Users/Kine Research/Documents/MATLAB/MSc_ghis_data/p%i_%s.csv', id, blocking_str), data_matrix);
        
     end
     
