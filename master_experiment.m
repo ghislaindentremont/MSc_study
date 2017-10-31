@@ -5,49 +5,9 @@ clearvars;
 
 try 
 
-    % Here we call some default settings for setting up Psychtoolbox
-    PsychDefaultSetup(2);  
-
-    % Get the screen numbers
-    screens = Screen('Screens');
-
-    % Draw to the external screen if avaliable
-    screen_number = max(screens);
-
-    % Define black and white
-    white = WhiteIndex(screen_number);
-    black = BlackIndex(screen_number);
-
-    % Open an on screen window
-    [window, window_rect] = PsychImaging('OpenWindow', screen_number, black);
-    HideCursor(); 
-
-    % Get the size of the on screen window
-    [screenXpixels, screenYpixels] = Screen('WindowSize', window);
-
-    % Query the frame duration
-    ifi = Screen('GetFlipInterval', window);
-
-    % Query the maximum priority level
-    % (I may not use this)
-    top_priority_level = MaxPriority(window); 
-
-    % Get the centre coordinate of the window
-    [xCenter, yCenter] = RectCenter(window_rect);
-
-    % Set up alpha-blending for smooth (anti-aliased) lines
-    Screen('BlendFunction', window, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
-
-    
-    
     %----------------------------------------------------------------------
     %                        ID/Demographics
     %----------------------------------------------------------------------
-    
-    Screen('TextSize', window, 36); 
-    DrawFormattedText(window, 'But really, enough about me, let''s talk about you...',...
-    'center', 'center', white );
-    Screen('Flip', window);
 
     prompt = {'Enter participant ID:'
         , 'Enter participant age:'
@@ -156,6 +116,46 @@ try
     KbQueueCreate(-1, keysOfInterest);
     % start 'escape' Queue
     KbQueueStart;
+    
+    
+    
+    %----------------------------------------------------------------------
+    %                        Screen Setup
+    %----------------------------------------------------------------------
+    
+    % Here we call some default settings for setting up Psychtoolbox
+    PsychDefaultSetup(2);  
+
+    % Get the screen numbers
+    screens = Screen('Screens');
+
+    % Draw to the external screen if avaliable
+    screen_number = max(screens);
+
+    % Define black and white
+    white = WhiteIndex(screen_number);
+    black = BlackIndex(screen_number);
+
+    % Open an on screen window
+    [window, window_rect] = PsychImaging('OpenWindow', screen_number, black);
+    HideCursor(); 
+
+    % Get the size of the on screen window
+    [screenXpixels, screenYpixels] = Screen('WindowSize', window);
+
+    % Query the frame duration
+    ifi = Screen('GetFlipInterval', window);
+
+    % Query the maximum priority level
+    % (I may not use this)
+    top_priority_level = MaxPriority(window); 
+
+    % Get the centre coordinate of the window
+    [xCenter, yCenter] = RectCenter(window_rect);
+
+    % Set up alpha-blending for smooth (anti-aliased) lines
+    Screen('BlendFunction', window, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
+    
 
     
 
@@ -231,8 +231,8 @@ try
     %                       Occlusion Goggles
     %----------------------------------------------------------------------
     
-    % initiate goggles
-    PLATO_trial(1)
+%     % initiate goggles
+%     PLATO_trial(1)
     
     
 
@@ -382,16 +382,20 @@ try
             % make sure the finger is still on touching the screen before
             % presenting target
             [this,that,buttonstatus]=GetMouse;
-            if buttonstatus(1)==1 
+            if buttonstatus(1)==0 
                 
                 xtarget=NaN;
                 ytarget=NaN;
                 too_soon=1;
                 
+                rt=NaN;
+                response_time=NaN;
+                
                 Screen('TextSize', window, 36); 
                 DrawFormattedText(window, 'Too Soon! Wait for the target before starting your movement.',...
                     'center', 'center', white );
                 Screen('Flip', window);
+                WaitSecs(3);
                 
             else
                 
@@ -418,7 +422,7 @@ try
                    
                    if toc>TARGET_TIME;
                        too_late=1;
-                       startbutton=0
+                       startbutton=0;
                        response_time = NaN;
                        if rt>=1
                            rt=NaN;
@@ -428,6 +432,7 @@ try
                        DrawFormattedText(window, 'Too Late! You need to reach the target faster.',...
                             'center', 'center', white );
                        Screen('Flip', window);
+                       WaitSecs(3);
                 
                    else
                        if buttonstatus(1)==0 && movementstart==0; %status when button is not pressed
@@ -436,13 +441,13 @@ try
                            rt = toc;
                            % occlude vision
                            if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
-                               PLATO_lens(1, 0, 0)
+%                                PLATO_lens(1, 0, 0)
                            elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
-                               PLATO_lens(1, 0, 0)
+%                                PLATO_lens(1, 0, 0)
                            end
                            movementstart=1;
                        % not pressed, but in movement
-                       elseif buttonstatus(1)==0 && movementstart~=0
+                       elseif buttonstatus(1)==0 && movementstart==1
                            startbutton=1;
                        % pressed but out of range   
                        % the box is 'TARGET_Y_CENTERED' by 'TARGET_Y_CENTERED'
@@ -455,7 +460,7 @@ try
                            response_time = toc;
                            % restore vision
                            % this should be redundant for certain conditions
-                           PLATO_lens(0, 0, 0)
+%                            PLATO_lens(0, 0, 0)
                        end
                    end 
 
@@ -465,7 +470,7 @@ try
             end
             
             % create long format data row for this trial
-            temp = [id age sex hand year month day hour minute seconds blocking task block trial iti blocking rt response_time too_soon too_late xfix yfix xtarget ytarget];
+            temp = [id age sex hand year month day hour minute seconds blocking block trial iti blocking rt response_time too_soon too_late xfix yfix xtarget ytarget];
             
             % append data matrix
             if trial == 1 && block == 1
@@ -473,6 +478,10 @@ try
             else
                 data_matrix = [data_matrix; temp];
             end
+            
+           % write response matrix to csv
+           % in trial loop so overwrites each trial
+           csvwrite(sprintf('C:/Users/CMP Research/Documents/MATLAB/Ghislain/MSc_ghis_data/p%i_%s.csv', id, blocking_str), data_matrix);
 
         end
         
@@ -483,18 +492,13 @@ try
             DrawFormattedText(window, 'The experiment is over\n\n\nThe experimenter should be with you shortly' ,...
             'center', 'center', white );
             Screen('Flip', window);
-            tic;
-            while toc < 10
-            end
+            WaitSecs(10);
         end
-        
-        % write response matrix to csv
-        csvwrite(sprintf('C:/Users/Kine Research/Documents/MATLAB/MSc_ghis_data/p%i_%s.csv', id, blocking_str), data_matrix);
-       
+                       
     end
-    
-    % deactivate goggles
-    PLATO_trial(0)
+        
+%     % deactivate goggles
+%     PLATO_trial(0)
     
     % turn off screen
     sca;
