@@ -14,6 +14,7 @@ try
         ,'Enter participant sex (''m'' or ''f''):'
         , 'Enter participant handedness (''r'' or ''l''):'
         , 'Enter first block condition (''v'' or ''n''):'
+        , 'Enter participant type (''p'' or ''e''):'
         };
     dlg_title = 'Demographics';
     num_lines = 1;
@@ -28,9 +29,13 @@ try
         sex = 99;
         hand = 99; 
         blocking_str = char(dems(5));
+        
+
+        pilot_str = 'p';
+        pilot = 1;
                 
-        if isempty(blocking_str)~=1
-            while (strcmp(blocking_str, 'v') ~= 1 && strcmp(blocking_str, 'n') ~= 1)
+        if isempty(blocking_str)~=1 
+            while (strcmp(blocking_str, 'v') ~= 1 && strcmp(blocking_str, 'n') ~= 1) 
                 dems = inputdlg(prompt,dlg_title,num_lines);
                 blocking_str = char(dems(5));
             end    
@@ -45,8 +50,8 @@ try
             blocking = 2;
         else
             disp('ERROR: blocking condition');  % should also get and error when putting in response matrix
-        end  
-          
+        end        
+        
     else
         
         id = char(dems(1));
@@ -54,14 +59,16 @@ try
         sex = char(dems(3));
         hand = char(dems(4));
         blocking_str = char(dems(5));
+        pilot_str = char(dems(6));
 
-        while (strcmp(hand, 'r') ~= 1 && strcmp(hand, 'l') ~= 1) ||  (strcmp(sex, 'm') ~= 1 && strcmp(sex, 'f') ~= 1) ||  (strcmp(blocking_str, 'v') ~= 1 && strcmp(blocking_str, 'n') ~= 1)
+        while (strcmp(hand, 'r') ~= 1 && strcmp(hand, 'l') ~= 1) ||  (strcmp(sex, 'm') ~= 1 && strcmp(sex, 'f') ~= 1) ||  (strcmp(blocking_str, 'v') ~= 1 && strcmp(blocking_str, 'n') ~= 1) || (strcmp(pilot_str, 'p') ~= 1 && strcmp(pilot_str, 'e') ~= 1)
             dems = inputdlg(prompt,dlg_title,num_lines);
             id = char(dems(1));
             age = char(dems(2));
             sex = char(dems(3));
             hand = char(dems(4));
             blocking_str = char(dems(5));
+            pilot_str = char(dems(6));
         end
 
         % get numbers
@@ -90,6 +97,14 @@ try
             blocking = 2;
         else
             disp('ERROR: blocking condition');  % should also get and error when putting in response matrix
+        end  
+        
+        if (strcmp(pilot_str, 'p') == 1)
+            pilot = 1;
+        elseif (strcmp(pilot_str, 'e') == 1)
+            pilot = 2;
+        else
+            disp('ERROR: participant type');  % should also get and error when putting in response matrix
         end  
         
     end
@@ -280,10 +295,10 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nPress Spacebar To Begin the Block', first_condition),...
+            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
                 'center', 'center', white );
             Screen('Flip', window);
-            KbStrokeWait; 
+            GetClicks; 
             %----------------------------------------------------------------------
             
         elseif block == 2
@@ -292,10 +307,10 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nPress Spacebar To Begin the Block', first_condition),...
+            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
                 'center', 'center', white );
             Screen('Flip', window);
-            KbStrokeWait; 
+            GetClicks; 
             %----------------------------------------------------------------------
 
         elseif block == 3
@@ -304,10 +319,10 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nPress Spacebar To Begin the Block', second_condition),...
+            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
                 'center', 'center', white );
             Screen('Flip', window);
-            KbStrokeWait; 
+            GetClicks; 
             %----------------------------------------------------------------------
   
         elseif block == 4
@@ -316,10 +331,10 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nPress Spacebar To Begin the Block', second_condition),...
+            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
                 'center', 'center', white );
             Screen('Flip', window);
-            KbStrokeWait; 
+            GetClicks;
             %----------------------------------------------------------------------
 
         else
@@ -340,7 +355,7 @@ try
                     break
                 elseif firstPress(KbName('p'))
                     Screen('TextSize', window, 36); 
-                    DrawFormattedText(window, 'You''ve requested a break. Take one.\n\n\nPress Spacebar To Continue',...
+                    DrawFormattedText(window, 'Taking a break\n\n\nPress Spacebar To Continue',...
                         'center', 'center', white );
                     Screen('Flip', window);
                     KbStrokeWait; 
@@ -349,7 +364,7 @@ try
             
             % waiting for finger to touch screen
             Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
-            vbl = Screen('Flip', window);
+            Screen('Flip', window);
             
             % setting touch screen cursor variables
             startbutton=1;
@@ -412,7 +427,7 @@ try
                 %--------------------- Draw Target ----------------------------
                 Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
                 Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR_TOUCHED, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
-                vbl = Screen('Flip', window);
+                Screen('Flip', window);
 
                 % setting touch screen cursor variables
                 startbutton=1;
@@ -454,7 +469,7 @@ try
                            % change fixation color upon take off
                            Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
                            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
-                           vbl = Screen('Flip', window);
+                           Screen('Flip', window);
                            
                            % occlude vision
                            if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
@@ -483,15 +498,37 @@ try
                                PLATO_trial(0);
                                PLATO_trial(1);
                            end
-
-
-                           % change target color when reached or time up
-                            Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR_TOUCHED, [], 4);
-                            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
-                            vbl = Screen('Flip', window);
-
-                            % keep target image on for 3 seconds 
-                            WaitSecs(TERMINAL_TIME);
+                           
+                           tic;
+                            % detecting screen release
+                            while toc < 3;
+                               [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
+                               if buttonstatus(1)==0; %status when button is not pressed
+                                   % change target color back if released!
+                                   Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
+                                   Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                                   Screen('TextSize', window, 36); 
+                                   DrawFormattedText(window, 'Keep your finger where it landed!',...
+                                        'center', 'center', white );
+                                   Screen('Flip', window);
+                               % status if it is pressed but beyond reasonable bounds
+                               elseif buttonstatus(1)==1 && (that<TARGET_Y_CENTERED-TARGET_Y_CENTERED || that>TARGET_Y_CENTERED*2 || this<TARGET_X_CENTERED-TARGET_Y_CENTERED || this>TARGET_X_CENTERED+TARGET_Y_CENTERED);  
+                                   % change target color back if moved too
+                                   % much!
+                                   Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
+                                   Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                                   Screen('TextSize', window, 36); 
+                                   DrawFormattedText(window, 'Keep your finger where it landed!',...
+                                        'center', 'center', white );
+                                   Screen('Flip', window);
+                               % if button is pressed in proper area 
+                               else
+                                   % change target color when reached or time up
+                                   Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR_TOUCHED, [], 4);
+                                   Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                                   Screen('Flip', window);
+                               end
+                            end
                        end
                    end
 
@@ -501,7 +538,7 @@ try
             end
             
             % create long format data row for this trial
-            temp = [id age sex hand year month day hour minute seconds blocking block trial iti blocking rt response_time too_soon too_late xfix yfix xtarget ytarget];
+            temp = [pilot id age sex hand year month day hour minute seconds blocking block trial iti blocking rt response_time too_soon too_late xfix yfix xtarget ytarget];
             
             % append data matrix
             if trial == 1 && block == 1
@@ -512,7 +549,7 @@ try
             
            % write response matrix to csv
            % in trial loop so overwrites each trial
-           csvwrite(sprintf('C:/Users/CMP Research/Documents/MATLAB/Ghislain/MSc_ghis_data/p%i_%s.csv', id, blocking_str), data_matrix);
+           csvwrite(sprintf('C:/Users/CMP Research/Documents/MATLAB/Ghislain/MSc_ghis_data/%s%i_%s.csv', pilot_str, id, blocking_str), data_matrix);
 
         end
         
@@ -537,6 +574,9 @@ try
 catch
     sca;
     psychrethrow(psychlasterror);
+    
+    % deactivate goggles
+    PLATO_trial(0)
 end
 
 
