@@ -177,9 +177,10 @@ try
     all_fix_coords = [x_fix_coords; y_fix_coords];
 
     % Set the line width for our fixation cross
-    LINE_WIDTH_PIX = 2;
+    LINE_WIDTH_PIX = 5;
  
     FIX_COLOR = [1 1 1];
+    FIX_COLOR_TOUCHED = [0 1 0];
     
 
 
@@ -187,9 +188,10 @@ try
     %                         Target
     %----------------------------------------------------------------------
 
-    TARGET_SIZE = 5;
+    TARGET_SIZE = 10;
     
     TARGET_COLOR = [1 1 1];  
+    TARGET_COLOR_TOUCHED = [0 1 0];
     
     % where is the target centered?
     TARGET_X_CENTERED = xCenter;
@@ -205,7 +207,13 @@ try
     WAIT_FRAMES = 1;
     
     % target time in seconds
-    TARGET_TIME = 2;
+    TARGET_TIME = 3;
+    
+    % late/soon feedback time
+    FEEDBACK_TIME = 3;
+    
+    % terminal feedback time
+    TERMINAL_TIME = 3;
     
 
 
@@ -231,8 +239,8 @@ try
     %                       Occlusion Goggles
     %----------------------------------------------------------------------
     
-%     % initiate goggles
-%     PLATO_trial(1)
+    % initiate goggles
+    PLATO_trial(1);
     
     
 
@@ -368,11 +376,11 @@ try
             iti = cond_matrix_shuffled(1,trial);
             iti_time_frames = round(iti / ifi / WAIT_FRAMES);
 
-            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR_TOUCHED, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
             vbl = Screen('Flip', window);
 
             for frame = 1:iti_time_frames-1
-                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR_TOUCHED, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                 vbl = Screen('Flip', window, vbl + (WAIT_FRAMES - 0.5) * ifi);
             end
             %--------------------------------------------------------------
@@ -395,7 +403,7 @@ try
                 DrawFormattedText(window, 'Too Soon! Wait for the target before starting your movement.',...
                     'center', 'center', white );
                 Screen('Flip', window);
-                WaitSecs(3);
+                WaitSecs(FEEDBACK_TIME);
                 
             else
                 
@@ -403,7 +411,7 @@ try
                 
                 %--------------------- Draw Target ----------------------------
                 Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
-                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR_TOUCHED, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                 vbl = Screen('Flip', window);
 
                 % setting touch screen cursor variables
@@ -414,36 +422,45 @@ try
                 movementstart=0;
                 
                 rt=1;
+                response_time=NaN;
 
                 % detecting top screen press
                 tic;
-                while startbutton==1 && toc<TARGET_TIME;
+                while startbutton==1;
                    [xtarget,ytarget,buttonstatus]=GetMouse; %gets x and y position of mouse
                    
                    if toc>TARGET_TIME;
                        too_late=1;
                        startbutton=0;
-                       response_time = NaN;
                        if rt>=1
                            rt=NaN;
                        end
+                       
+                       xtarget=NaN;
+                       ytarget=NaN;
                        
                        Screen('TextSize', window, 36); 
                        DrawFormattedText(window, 'Too Late! You need to reach the target faster.',...
                             'center', 'center', white );
                        Screen('Flip', window);
-                       WaitSecs(3);
+                       WaitSecs(FEEDBACK_TIME);
                 
                    else
                        if buttonstatus(1)==0 && movementstart==0; %status when button is not pressed
                            startbutton=1;
                            % get reaction time 
                            rt = toc;
+                           
+                           % change fixation color upon take off
+                           Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
+                           Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                           vbl = Screen('Flip', window);
+                           
                            % occlude vision
                            if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
-%                                PLATO_lens(1, 0, 0)
+                               PLATO_lens(1, 0, 0);
                            elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
-%                                PLATO_lens(1, 0, 0)
+                               PLATO_lens(1, 0, 0);
                            end
                            movementstart=1;
                        % not pressed, but in movement
@@ -459,10 +476,24 @@ try
                            startbutton=0;
                            response_time = toc;
                            % restore vision
-                           % this should be redundant for certain conditions
-%                            PLATO_lens(0, 0, 0)
+                           if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
+                               PLATO_trial(0);
+                               PLATO_trial(1);
+                           elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
+                               PLATO_trial(0);
+                               PLATO_trial(1);
+                           end
+
+
+                           % change target color when reached or time up
+                            Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR_TOUCHED, [], 4);
+                            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                            vbl = Screen('Flip', window);
+
+                            % keep target image on for 3 seconds 
+                            WaitSecs(TERMINAL_TIME);
                        end
-                   end 
+                   end
 
                 end
                 %--------------------------------------------------------------
@@ -497,8 +528,8 @@ try
                        
     end
         
-%     % deactivate goggles
-%     PLATO_trial(0)
+    % deactivate goggles
+    PLATO_trial(0)
     
     % turn off screen
     sca;
