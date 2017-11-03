@@ -211,8 +211,10 @@ try
     TARGET_COLOR_TOUCHED = [0 1 0];
     
     % where is the target centered?
-    TARGET_X_CENTERED = xCenter/4;
+    TARGET_X_CENTERED = xCenter*2/3;
     TARGET_Y_CENTERED = yCenter;
+    
+    TARGET_X_BOUND = xCenter*4/3
 
 
     
@@ -587,7 +589,7 @@ try
                        % pressed but out of range   
                        % response has to be beyond half way point along
                        % midline of screen
-                       elseif buttonstatus(1)==1 && (xtarget > xCenter);  
+                       elseif buttonstatus(1)==1 && (xtarget > TARGET_X_BOUND);  
                            startbutton=1;
                        % pressed and in range
                        else
@@ -607,7 +609,7 @@ try
                             % detecting screen release
                             while toc < 3;
                                [this,that,buttonstatus]=GetMouse; 
-                               if buttonstatus(1)==0 || (buttonstatus(1)==1 && (that<TARGET_Y_CENTERED-TARGET_Y_CENTERED || that>TARGET_Y_CENTERED*2 || this<TARGET_X_CENTERED-TARGET_Y_CENTERED || this>TARGET_X_CENTERED+TARGET_Y_CENTERED)); 
+                               if buttonstatus(1)==0 || (buttonstatus(1)==1 && (this > TARGET_X_BOUND)); 
                                    
                                    Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
                                    Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
