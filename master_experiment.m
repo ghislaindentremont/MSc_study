@@ -177,13 +177,15 @@ try
     %----------------------------------------------------------------------
     %                       Home Cross
     %----------------------------------------------------------------------
+    
+    % HAVE TO ACCOUNT FOR ROTATION
 
     % Here we set the length of the arms (from center) of our fixation cross
     FIX_CROSS_DIM_PIX = 20;
     
     % where do we want the fixation cross centered
-    FIX_X_CENTERED = xCenter;
-    FIX_Y_CENTERED = yCenter*15/8;
+    FIX_X_CENTERED = xCenter*15/8;
+    FIX_Y_CENTERED = yCenter;
 
     % Now we set the coordinates (these are all relative to zero we will let
     % the drawing routine center the cross in the center of our monitor for us)
@@ -209,8 +211,8 @@ try
     TARGET_COLOR_TOUCHED = [0 1 0];
     
     % where is the target centered?
-    TARGET_X_CENTERED = xCenter;
-    TARGET_Y_CENTERED = yCenter/8;
+    TARGET_X_CENTERED = xCenter/4;
+    TARGET_Y_CENTERED = yCenter;
 
 
     
@@ -258,7 +260,16 @@ try
     PLATO_trial(1);
     
     
-
+    
+    %----------------------------------------------------------------------
+    %                         Text Rotation
+    %----------------------------------------------------------------------
+    
+    % angle of rotation on screen
+    ANGLE = 270;
+    
+    
+    
     %----------------------------------------------------------------------
     %                       Experimental Loop
     %----------------------------------------------------------------------
@@ -281,6 +292,7 @@ try
         % final condition matrix
         cond_matrix_shuffled = [itis];
         
+        % define strings for onscreen messages 
         if strcmp(blocking_str, 'v')
             first_condition = 'VISION';
             second_condition = 'NO VISION';
@@ -288,15 +300,28 @@ try
             first_condition = 'NO VISION';
             second_condition = 'VISION';
         end
-        
+
         if block == 1
             
             num_trials_in_this_block = NUM_PRACTICE_TRIALS;
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
+            % get text bounds
+            [~, ~, textBounds] = DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
                 'center', 'center', white );
+            % reset background screen
+            Screen('FillRect', window, black);
+            % define texture to hold text 
+            textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+            textTexture = Screen('MakeTexture', window, textureRect);
+            % set text size for texture 
+            Screen('TextSize', textTexture, 36);
+            % draw text onto texture 
+            DrawFormattedText(textTexture, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
+                'center', 'center', white );
+            Screen('DrawTextures', window, textTexture, [], [], ANGLE);
             Screen('Flip', window);
             GetClicks; 
             %----------------------------------------------------------------------
@@ -307,8 +332,21 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
+            % get text bounds
+            [~, ~, textBounds] = DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
                 'center', 'center', white );
+            % reset background screen
+            Screen('FillRect', window, black);
+            % define texture to hold text 
+            textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+            textTexture = Screen('MakeTexture', window, textureRect);
+            % set text size for texture 
+            Screen('TextSize', textTexture, 36);
+            % draw text onto texture 
+            DrawFormattedText(textTexture, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
+                'center', 'center', white );
+            Screen('DrawTextures', window, textTexture, [], [], ANGLE);
             Screen('Flip', window);
             GetClicks; 
             %----------------------------------------------------------------------
@@ -319,8 +357,21 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
+            % get text bounds
+            [~, ~, textBounds] = DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
                 'center', 'center', white );
+            % reset background screen
+            Screen('FillRect', window, black);
+            % define texture to hold text 
+            textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+            textTexture = Screen('MakeTexture', window, textureRect);
+            % set text size for texture 
+            Screen('TextSize', textTexture, 36);
+            % draw text onto texture 
+            DrawFormattedText(textTexture, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
+                'center', 'center', white );
+            Screen('DrawTextures', window, textTexture, [], [], ANGLE);
             Screen('Flip', window);
             GetClicks; 
             %----------------------------------------------------------------------
@@ -331,10 +382,23 @@ try
             
             %------------------- Block Instruction Message ------------------------
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
+            % get text bounds
+            [~, ~, textBounds] = DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
                 'center', 'center', white );
+            % reset background screen
+            Screen('FillRect', window, black);
+            % define texture to hold text 
+            textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+            textTexture = Screen('MakeTexture', window, textureRect);
+            % set text size for texture 
+            Screen('TextSize', textTexture, 36);
+            % draw text onto texture 
+            DrawFormattedText(textTexture, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
+                'center', 'center', white );
+            Screen('DrawTextures', window, textTexture, [], [], ANGLE);
             Screen('Flip', window);
-            GetClicks;
+            GetClicks; 
             %----------------------------------------------------------------------
 
         else
@@ -355,10 +419,23 @@ try
                     break
                 elseif firstPress(KbName('p'))
                     Screen('TextSize', window, 36); 
-                    DrawFormattedText(window, 'Taking a break\n\n\nPress Spacebar To Continue',...
+                    % get text bounds
+                    [~, ~, textBounds] = DrawFormattedText(window, 'Taking a break\n\n\nPress Spacebar To Continue',...
                         'center', 'center', white );
+                    % reset background screen
+                    Screen('FillRect', window, black);
+                    % define texture to hold text 
+                    textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                        ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+                    textTexture = Screen('MakeTexture', window, textureRect);
+                    % set text size for texture 
+                    Screen('TextSize', textTexture, 36);
+                    % draw text onto texture 
+                    DrawFormattedText(textTexture, 'Taking a break\n\n\nPress Spacebar To Continue',...
+                        'center', 'center', white );
+                    Screen('DrawTextures', window, textTexture, [], [], ANGLE);
                     Screen('Flip', window);
-                    KbStrokeWait; 
+                    KbStrokeWait;  
                 end
             end
             
@@ -378,7 +455,7 @@ try
                if buttonstatus(1)==0; %status when button is not pressed
                    startbutton=1;
                % status if it is pressed but beyond reasonable bounds
-               elseif buttonstatus(1)==1 && (yfix<FIX_Y_CENTERED-FIX_CROSS_DIM_PIX || yfix>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX || xfix<FIX_X_CENTERED-FIX_CROSS_DIM_PIX || xfix>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX);  
+               elseif buttonstatus(1)==1 && (yfix<FIX_Y_CENTERED-FIX_CROSS_DIM_PIX || yfix>FIX_Y_CENTERED+FIX_CROSS_DIM_PIX || xfix<FIX_X_CENTERED-FIX_CROSS_DIM_PIX || xfix>FIX_X_CENTERED+FIX_CROSS_DIM_PIX);  
                    startbutton=1;
                % if button is pressed in proper area 
                else
@@ -413,12 +490,25 @@ try
                 
                 rt=NaN;
                 response_time=NaN;
-                
+
                 Screen('TextSize', window, 36); 
-                DrawFormattedText(window, 'Too Soon! Wait for the target before starting your movement.',...
+                % get text bounds
+                [~, ~, textBounds] = DrawFormattedText(window, 'Too Soon! Wait for the target before starting your movement.',...
                     'center', 'center', white );
+                % reset background screen
+                Screen('FillRect', window, black);
+                % define texture to hold text 
+                textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                    ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+                textTexture = Screen('MakeTexture', window, textureRect);
+                % set text size for texture 
+                Screen('TextSize', textTexture, 36);
+                % draw text onto texture 
+                DrawFormattedText(textTexture, 'Too Soon! Wait for the target before starting your movement.',...
+                    'center', 'center', white );
+                Screen('DrawTextures', window, textTexture, [], [], ANGLE);
                 Screen('Flip', window);
-                WaitSecs(FEEDBACK_TIME);
+                WaitSecs(FEEDBACK_TIME); 
                 
             else
                 
@@ -454,11 +544,24 @@ try
                        xtarget=NaN;
                        ytarget=NaN;
                        
-                       Screen('TextSize', window, 36); 
-                       DrawFormattedText(window, 'Too Late! You need to reach the target faster.',...
+                        Screen('TextSize', window, 36); 
+                        % get text bounds
+                        [~, ~, textBounds] = DrawFormattedText(window, 'Too Late! You need to reach the target faster.',...
                             'center', 'center', white );
-                       Screen('Flip', window);
-                       WaitSecs(FEEDBACK_TIME);
+                        % reset background screen
+                        Screen('FillRect', window, black);
+                        % define texture to hold text 
+                        textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                            ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+                        textTexture = Screen('MakeTexture', window, textureRect);
+                        % set text size for texture 
+                        Screen('TextSize', textTexture, 36);
+                        % draw text onto texture 
+                        DrawFormattedText(textTexture, 'Too Late! You need to reach the target faster.',...
+                            'center', 'center', white );
+                        Screen('DrawTextures', window, textTexture, [], [], ANGLE);
+                        Screen('Flip', window);
+                        WaitSecs(FEEDBACK_TIME); 
                 
                    else
                        if buttonstatus(1)==0 && movementstart==0; %status when button is not pressed
@@ -482,8 +585,9 @@ try
                        elseif buttonstatus(1)==0 && movementstart==1
                            startbutton=1;
                        % pressed but out of range   
-                       % the box is 'TARGET_Y_CENTERED' by 'TARGET_Y_CENTERED'
-                       elseif buttonstatus(1)==1 && (ytarget<TARGET_Y_CENTERED-TARGET_Y_CENTERED || ytarget>TARGET_Y_CENTERED*2 || xtarget<TARGET_X_CENTERED-TARGET_Y_CENTERED || xtarget>TARGET_X_CENTERED+TARGET_Y_CENTERED);  
+                       % response has to be beyond half way point along
+                       % midline of screen
+                       elseif buttonstatus(1)==1 && (xtarget > xCenter);  
                            startbutton=1;
                        % pressed and in range
                        else
@@ -502,31 +606,36 @@ try
                            tic;
                             % detecting screen release
                             while toc < 3;
-                               [this,that,buttonstatus]=GetMouse; %gets x and y position of mouse
-                               if buttonstatus(1)==0; %status when button is not pressed
-                                   % change target color back if released!
+                               [this,that,buttonstatus]=GetMouse; 
+                               if buttonstatus(1)==0 || (buttonstatus(1)==1 && (that<TARGET_Y_CENTERED-TARGET_Y_CENTERED || that>TARGET_Y_CENTERED*2 || this<TARGET_X_CENTERED-TARGET_Y_CENTERED || this>TARGET_X_CENTERED+TARGET_Y_CENTERED)); 
+                                   
                                    Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
                                    Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                                    Screen('TextSize', window, 36); 
-                                   DrawFormattedText(window, 'Keep your finger where it landed!',...
+                                    % get text bounds
+                                    [~, ~, textBounds] = DrawFormattedText(window, 'Keep your finger where it landed!',...
                                         'center', 'center', white );
-                                   Screen('Flip', window);
-                               % status if it is pressed but beyond reasonable bounds
-                               elseif buttonstatus(1)==1 && (that<TARGET_Y_CENTERED-TARGET_Y_CENTERED || that>TARGET_Y_CENTERED*2 || this<TARGET_X_CENTERED-TARGET_Y_CENTERED || this>TARGET_X_CENTERED+TARGET_Y_CENTERED);  
-                                   % change target color back if moved too
-                                   % much!
-                                   Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
-                                   Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
-                                   Screen('TextSize', window, 36); 
-                                   DrawFormattedText(window, 'Keep your finger where it landed!',...
+                                    % reset background screen
+                                    Screen('FillRect', window, black);
+                                    % define texture to hold text 
+                                    textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                                        ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+                                    textTexture = Screen('MakeTexture', window, textureRect);
+                                    % set text size for texture 
+                                    Screen('TextSize', textTexture, 36);
+                                    % draw text onto texture 
+                                    DrawFormattedText(textTexture, 'Keep your finger where it landed!',...
                                         'center', 'center', white );
-                                   Screen('Flip', window);
-                               % if button is pressed in proper area 
+                                    Screen('DrawTextures', window, textTexture, [], [], ANGLE);
+                                    Screen('Flip', window);   
+                                    
                                else
+                                   
                                    % change target color when reached or time up
                                    Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR_TOUCHED, [], 4);
                                    Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                                    Screen('Flip', window);
+                                   
                                end
                             end
                        end
@@ -556,11 +665,26 @@ try
         % collect raw data for an added amount of time to avoid
         % edge-effects with offline filtering
         if firstPress(KbName('ESCAPE'))
+            
             Screen('TextSize', window, 36); 
-            DrawFormattedText(window, 'The experiment is over\n\n\nThe experimenter should be with you shortly' ,...
-            'center', 'center', white );
-            Screen('Flip', window);
+            % get text bounds
+            [~, ~, textBounds] = DrawFormattedText(window, 'The experiment is over\n\n\nThe experimenter should be with you shortly',...
+                'center', 'center', white );
+            % reset background screen
+            Screen('FillRect', window, black);
+            % define texture to hold text 
+            textureRect = ones(ceil((textBounds(4) - textBounds(2)) * 1.1),...
+                ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
+            textTexture = Screen('MakeTexture', window, textureRect);
+            % set text size for texture 
+            Screen('TextSize', textTexture, 36);
+            % draw text onto texture 
+            DrawFormattedText(textTexture, 'The experiment is over\n\n\nThe experimenter should be with you shortly',...
+                'center', 'center', white );
+            Screen('DrawTextures', window, textTexture, [], [], ANGLE);
+            Screen('Flip', window); 
             WaitSecs(10);
+            
         end
                        
     end
