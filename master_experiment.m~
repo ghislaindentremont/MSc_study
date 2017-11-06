@@ -270,8 +270,6 @@ try
     % angle of rotation on screen
     ANGLE = 270;
     
-    FONT_SIZE = 28;
-    
     
     
     %----------------------------------------------------------------------
@@ -310,7 +308,7 @@ try
             num_trials_in_this_block = NUM_PRACTICE_TRIALS;
             
             %------------------- Block Instruction Message ------------------------
-            Screen('TextSize', window, FONT_SIZE); 
+            Screen('TextSize', window, 36); 
             % get text bounds
             [~, ~, textBounds] = DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
                 'center', 'center', white );
@@ -321,7 +319,7 @@ try
                 ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
             textTexture = Screen('MakeTexture', window, textureRect);
             % set text size for texture 
-            Screen('TextSize', textTexture, FONT_SIZE);
+            Screen('TextSize', textTexture, 36);
             % draw text onto texture 
             DrawFormattedText(textTexture, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
                 'center', 'center', white );
@@ -335,7 +333,7 @@ try
             num_trials_in_this_block = TRIALS_PER_CONDITION;
             
             %------------------- Block Instruction Message ------------------------
-            Screen('TextSize', window, FONT_SIZE); 
+            Screen('TextSize', window, 36); 
             % get text bounds
             [~, ~, textBounds] = DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
                 'center', 'center', white );
@@ -346,7 +344,7 @@ try
                 ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
             textTexture = Screen('MakeTexture', window, textureRect);
             % set text size for texture 
-            Screen('TextSize', textTexture, FONT_SIZE);
+            Screen('TextSize', textTexture, 36);
             % draw text onto texture 
             DrawFormattedText(textTexture, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', first_condition),...
                 'center', 'center', white );
@@ -360,7 +358,7 @@ try
             num_trials_in_this_block = NUM_PRACTICE_TRIALS;
             
             %------------------- Block Instruction Message ------------------------
-            Screen('TextSize', window, FONT_SIZE); 
+            Screen('TextSize', window, 36); 
             % get text bounds
             [~, ~, textBounds] = DrawFormattedText(window, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
                 'center', 'center', white );
@@ -371,7 +369,7 @@ try
                 ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
             textTexture = Screen('MakeTexture', window, textureRect);
             % set text size for texture 
-            Screen('TextSize', textTexture, FONT_SIZE);
+            Screen('TextSize', textTexture, 36);
             % draw text onto texture 
             DrawFormattedText(textTexture, sprintf('The following are PRACTICE trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
                 'center', 'center', white );
@@ -385,7 +383,7 @@ try
             num_trials_in_this_block = TRIALS_PER_CONDITION;
             
             %------------------- Block Instruction Message ------------------------
-            Screen('TextSize', window, FONT_SIZE); 
+            Screen('TextSize', window, 36); 
             % get text bounds
             [~, ~, textBounds] = DrawFormattedText(window, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
                 'center', 'center', white );
@@ -396,7 +394,7 @@ try
                 ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
             textTexture = Screen('MakeTexture', window, textureRect);
             % set text size for texture 
-            Screen('TextSize', textTexture, FONT_SIZE);
+            Screen('TextSize', textTexture, 36);
             % draw text onto texture 
             DrawFormattedText(textTexture, sprintf('The following are EXPERIMENTAL trials for the %s condition\n\n\nTouch the Screen to Begin the Block', second_condition),...
                 'center', 'center', white );
@@ -422,7 +420,7 @@ try
                 if firstPress(KbName('ESCAPE'))
                     break
                 elseif firstPress(KbName('p'))
-                    Screen('TextSize', window, FONT_SIZE); 
+                    Screen('TextSize', window, 36); 
                     % get text bounds
                     [~, ~, textBounds] = DrawFormattedText(window, 'Taking a break\n\n\nPress Spacebar To Continue',...
                         'center', 'center', white );
@@ -433,7 +431,7 @@ try
                         ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
                     textTexture = Screen('MakeTexture', window, textureRect);
                     % set text size for texture 
-                    Screen('TextSize', textTexture, FONT_SIZE);
+                    Screen('TextSize', textTexture, 36);
                     % draw text onto texture 
                     DrawFormattedText(textTexture, 'Taking a break\n\n\nPress Spacebar To Continue',...
                         'center', 'center', white );
@@ -495,7 +493,7 @@ try
                 rt=NaN;
                 response_time=NaN;
 
-                Screen('TextSize', window, FONT_SIZE); 
+                Screen('TextSize', window, 36); 
                 % get text bounds
                 [~, ~, textBounds] = DrawFormattedText(window, 'Too Soon! Wait for the target before starting your movement.',...
                     'center', 'center', white );
@@ -506,7 +504,7 @@ try
                     ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
                 textTexture = Screen('MakeTexture', window, textureRect);
                 % set text size for texture 
-                Screen('TextSize', textTexture, FONT_SIZE);
+                Screen('TextSize', textTexture, 36);
                 % draw text onto texture 
                 DrawFormattedText(textTexture, 'Too Soon! Wait for the target before starting your movement.',...
                     'center', 'center', white );
@@ -548,11 +546,7 @@ try
                        xtarget=NaN;
                        ytarget=NaN;
                        
-                       % restore vision
-                       PLATO_trial(0);
-                       PLATO_trial(1);
-                       
-                        Screen('TextSize', window, FONT_SIZE); 
+                        Screen('TextSize', window, 36); 
                         % get text bounds
                         [~, ~, textBounds] = DrawFormattedText(window, 'Too Late! You need to reach the target faster.',...
                             'center', 'center', white );
@@ -563,7 +557,7 @@ try
                             ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
                         textTexture = Screen('MakeTexture', window, textureRect);
                         % set text size for texture 
-                        Screen('TextSize', textTexture, FONT_SIZE);
+                        Screen('TextSize', textTexture, 36);
                         % draw text onto texture 
                         DrawFormattedText(textTexture, 'Too Late! You need to reach the target faster.',...
                             'center', 'center', white );
@@ -619,7 +613,7 @@ try
                                    
                                    Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
                                    Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
-                                   Screen('TextSize', window, FONT_SIZE); 
+                                   Screen('TextSize', window, 36); 
                                     % get text bounds
                                     [~, ~, textBounds] = DrawFormattedText(window, 'Keep your finger where it landed!',...
                                         'center', 'center', white );
@@ -630,7 +624,7 @@ try
                                         ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
                                     textTexture = Screen('MakeTexture', window, textureRect);
                                     % set text size for texture 
-                                    Screen('TextSize', textTexture, FONT_SIZE);
+                                    Screen('TextSize', textTexture, 36);
                                     % draw text onto texture 
                                     DrawFormattedText(textTexture, 'Keep your finger where it landed!',...
                                         'center', 'center', white );
@@ -672,8 +666,7 @@ try
                        
     end
 
-    % end of experiment message
-    Screen('TextSize', window, FONT_SIZE); 
+    Screen('TextSize', window, 36); 
     % get text bounds
     [~, ~, textBounds] = DrawFormattedText(window, 'The experiment is over\n\n\nThe experimenter should be with you shortly',...
         'center', 'center', white );
@@ -684,7 +677,7 @@ try
         ceil((textBounds(3) - textBounds(1)) * 1.1)) .* black;
     textTexture = Screen('MakeTexture', window, textureRect);
     % set text size for texture 
-    Screen('TextSize', textTexture, FONT_SIZE);
+    Screen('TextSize', textTexture, 36);
     % draw text onto texture 
     DrawFormattedText(textTexture, 'The experiment is over\n\n\nThe experimenter should be with you shortly',...
         'center', 'center', white );
