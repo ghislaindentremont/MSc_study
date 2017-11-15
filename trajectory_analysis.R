@@ -56,24 +56,63 @@ dat$condition = factor(ifelse((dat$blocking == "vision" & dat$block == 2) | (dat
 summary(dat)
 
 # reaction time
+dat$good_rt = dat$rt * 1000
+
+ggplot()+
+  geom_histogram(data = subset(dat, condition == "no_vision"), aes(good_rt, ..density..), bins=20, alpha = 0.2, fill = "red")+
+  geom_density(data = subset(dat, condition == "no_vision"), aes(good_rt, ..density..), bins=20, color = "red")+
+  geom_histogram(data = subset(dat, condition == "vision"), aes(good_rt, ..density..), bins=20, alpha = 0.2, fill = "blue")+
+  geom_density(data = subset(dat, condition == "vision"), aes(good_rt, ..density..), bins=20, color = "blue")+
+  facet_wrap(~id)+
+  xlab("reaction time (ms)")
+
 dat %>%
-  ggplot(aes(rt*1000, ..density.., group = id))+
-    geom_histogram(bins=20)+
-    geom_density()+
-    facet_wrap(~id)+
-    xlab("reaction time (ms)")
+  group_by(pilot, id, condition) %>%
+  dplyr::summarize(mean_id_rt = mean(good_rt, na.rm = T)) %>%
+  group_by(condition) %>%
+  dplyr::summarize(mean_rt = mean(mean_id_rt, na.rm = T))
+  
 
 # response time
-dat %>%
-  ggplot(aes(response_time*1000, ..density.., group = id))+
-  geom_histogram(bins=20)+
-  geom_density()+
+dat$good_response_time = dat$response_time * 1000
+
+ggplot()+
+  geom_histogram(data = subset(dat, condition == "no_vision"), aes(good_response_time, ..density..), bins=20, alpha = 0.2, fill = "red")+
+  geom_density(data = subset(dat, condition == "no_vision"), aes(good_response_time, ..density..), bins=20, color = "red")+
+  geom_histogram(data = subset(dat, condition == "vision"), aes(good_response_time, ..density..), bins=20, alpha = 0.2, fill = "blue")+
+  geom_density(data = subset(dat, condition == "vision"), aes(good_response_time, ..density..), bins=20, color = "blue")+
   facet_wrap(~id)+
   xlab("response time (ms)")
 
+dat %>%
+  group_by(pilot, id, condition) %>%
+  dplyr::summarize(mean_id_response_time = mean(good_response_time, na.rm = T)) %>%
+  group_by(condition) %>%
+  dplyr::summarize(mean_response_time = mean(mean_id_response_time, na.rm = T))
+
+# movement time
+dat$good_movement_time = dat$good_response_time - dat$good_rt
+
+ggplot()+
+  geom_histogram(data = subset(dat, condition == "no_vision"), aes(good_movement_time, ..density..), bins=20, alpha = 0.2, fill = "red")+
+  geom_density(data = subset(dat, condition == "no_vision"), aes(good_movement_time, ..density..), bins=20, color = "red")+
+  geom_histogram(data = subset(dat, condition == "vision"), aes(good_movement_time, ..density..), bins=20, alpha = 0.2, fill = "blue")+
+  geom_density(data = subset(dat, condition == "vision"), aes(good_movement_time, ..density..), bins=20, color = "blue")+
+  facet_wrap(~id)+
+  xlab("movement time (ms)")
+
+dat %>%
+  group_by(pilot, id, condition) %>%
+  dplyr::summarize(mean_id_movement_time = mean(good_movement_time, na.rm = T)) %>%
+  group_by(condition) %>%
+  dplyr::summarize(mean_movement_time = mean(mean_id_movement_time, na.rm = T))
+
+
 # define touch screen parameters in terms of participant coordinates
-xdim = 1080
-ydim = 1920
+mm_per_pixel =  0.26458333333333
+
+xdim = 1080 * mm_per_pixel
+ydim = 1920 * mm_per_pixel
 
 xfixcoor = xdim/2
 yfixcoor = ydim*1/16
@@ -82,12 +121,12 @@ xtargetcoor = xdim/2
 ytargetcoor = ydim*2/3
 
 # now redefine touch screen fixation touches to be in interpretable frame of reference (0,0 in bottom left corner)
-dat$good_xfix = xdim - dat$yfix
-dat$good_yfix = ydim - dat$xfix
+dat$good_xfix = xdim - dat$yfix * mm_per_pixel
+dat$good_yfix = ydim - dat$xfix * mm_per_pixel
 
 # now redefine touch screen target responses to be in interpretable frame of reference
-dat$good_xtarget = xdim - dat$ytarget
-dat$good_ytarget = ydim - dat$xtarget
+dat$good_xtarget = xdim - dat$ytarget * mm_per_pixel
+dat$good_ytarget = ydim - dat$xtarget * mm_per_pixel
 
 # target
 dat %>%
@@ -98,6 +137,8 @@ dat %>%
   geom_point(aes(x=xtargetcoor, y=ytargetcoor, group = id), na.rm = T, size = 0.5, color = "red")+
   xlim(c(0, xdim))+
   ylim(c(0, ydim))+
+  xlab("x (mm)")+
+  ylab("y (mm)")+
   facet_wrap(condition~id)
 
 # look at error 
@@ -224,8 +265,8 @@ df$time = df$frame/200*1000
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=x), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (x)")+
+  xlab("time (ms)")+
+  ylab("x position (mm)")+
   geom_hline(yintercept = 275, color = "red")+  # high cut-off, applicable across participants
   geom_hline(yintercept = 175, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
@@ -234,16 +275,16 @@ df %>%
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=y), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (y)")+
+  xlab("time (ms)")+
+  ylab("y position (mm)")+
   facet_grid(.~condition)
 
 # Z
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=z), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (z)")+
+  xlab("time (ms)")+
+  ylab("z position (mm)")+
   ylim(c(-3200,-3000))+
   geom_hline(yintercept = -3075, color = "red")+  # high cut-off, applicable across participants
   geom_hline(yintercept = -3150, color = "red")+  # low cut-off, applicable across participants
@@ -257,8 +298,8 @@ df$z = ifelse(df$z > -3075 | df$z < -3150 , df$z2, df$z)
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=x), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (x)")+
+  xlab("time (ms)")+
+  ylab("x position (mm)")+
   geom_hline(yintercept = 275, color = "red")+  # high cut-off, applicable across participants
   geom_hline(yintercept = 175, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
@@ -267,16 +308,16 @@ df %>%
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=y), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (y)")+
+  xlab("time (ms)")+
+  ylab("y position (mm)")+
   facet_grid(.~condition)
 
 # Z
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=z), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (z)")+
+  xlab("time (ms)")+
+  ylab("z position (mm)")+
   ylim(c(-3200,-3000))+
   geom_hline(yintercept = -3075, color = "red")+  # high cut-off, applicable across participants
   geom_hline(yintercept = -3150, color = "red")+  # low cut-off, applicable across participants
@@ -309,8 +350,8 @@ df %>%
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=x), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (x)")+
+  xlab("time (ms)")+
+  ylab("x position (mm)")+
   geom_hline(yintercept = 275, color = "red")+  # high cut-off, applicable across participants
   geom_hline(yintercept = 175, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
@@ -319,16 +360,16 @@ df %>%
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=y), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (y)")+
+  xlab("time (ms)")+
+  ylab("y position (mm)")+
   facet_grid(.~condition)
 
 # Z
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=z), alpha = 0.2, size = .5)+
-  xlab("time")+
-  ylab("position (z)")+
+  xlab("time (ms)")+
+  ylab("z position (mm)")+
   geom_hline(yintercept = -3075, color = "red")+  # high cut-off, applicable across participants
   geom_hline(yintercept = -3150, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
@@ -432,8 +473,8 @@ df_long_trim %>%
   # The absolute velocity is the same across all three coordinates
   ggplot()+
   geom_line(aes(x=zero_time, y=abs_velo, color = trial, group = trial), alpha = 0.5)+
-  xlab("time")+
-  ylab("absolute velocity")+
+  xlab("time (ms)")+
+  ylab("absolute velocity (mm^2)")+
   facet_grid(id~condition)+
   theme(legend.position = "none")
 
@@ -448,8 +489,8 @@ df_long_trim %>%
 df_velo_avg %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=abs_velo_avg, color = id, group = id), alpha = 0.5)+
-  xlab("time")+
-  ylab("absolute velocity")+
+  xlab("time (ms)")+
+  ylab("absolute velocity (mm^2)")+
   facet_grid(.~condition)
 
 # again averages
@@ -462,8 +503,8 @@ df_velo_avg %>%
 df_velo_grand_avg %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=abs_velo_grand_avg))+
-  xlab("time")+
-  ylab("absolute velocity")+
+  xlab("time (ms)")+
+  ylab("absolute velocity (mm^2)")+
   facet_grid(.~condition)
 
 
@@ -472,8 +513,8 @@ df_long_trim %>%
   dplyr::filter(coordinate == "x") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("time")+
-  ylab("position (x)")+
+  xlab("time (ms)")+
+  ylab("x position (mm)")+
   facet_grid(id~condition)+
   theme(legend.position = "none")
 
@@ -481,8 +522,8 @@ df_long_trim %>%
   dplyr::filter(coordinate == "y") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("time")+
-  ylab("position (y)")+
+  xlab("time (ms)")+
+  ylab("y position (mm)")+
   facet_grid(id~condition)+
   theme(legend.position = "none")
 
@@ -490,8 +531,8 @@ df_long_trim %>%
   dplyr::filter(coordinate == "z") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("time")+
-  ylab("position (z)")+
+  xlab("time (ms)")+
+  ylab("y position (mm)")+
   facet_grid(id~condition)+
   theme(legend.position = "none")
 
@@ -508,24 +549,24 @@ df_long_trim_avg %>%
   dplyr::filter(coordinate == "x") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("time")+
-  ylab("position (x)")+
+  xlab("time (ms)")+
+  ylab("x position (mm)")+
   facet_grid(.~condition)
 
 df_long_trim_avg %>%
   dplyr::filter(coordinate == "y") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("time")+
-  ylab("position (y)")+
+  xlab("time (ms)")+
+  ylab("y position (mm)")+
   facet_grid(.~condition)
 
 df_long_trim_avg %>%
   dplyr::filter(coordinate == "z") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("time")+
-  ylab("position (z)")+
+  xlab("time (ms)")+
+  ylab("z position (mm)")+
   facet_grid(.~condition)
 
 # take averages over participants
@@ -539,24 +580,24 @@ df_long_trim_grand_avg %>%
   dplyr::filter(coordinate == "x") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position_grand_avg))+
-  xlab("time")+
-  ylab("position (x)")+
+  xlab("time (ms)")+
+  ylab("x position (mm)")+
   facet_grid(.~condition)
 
 df_long_trim_grand_avg %>%
   dplyr::filter(coordinate == "y") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position_grand_avg))+
-  xlab("time")+
-  ylab("position (y)")+
+  xlab("time (ms)")+
+  ylab("y position (mm)")+
   facet_grid(.~condition)
 
 df_long_trim_grand_avg %>%
   dplyr::filter(coordinate == "z") %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position_grand_avg))+
-  xlab("time")+
-  ylab("position (z)")+
+  xlab("time (ms)")+
+  ylab("z position (mm)")+
   facet_grid(.~condition)
 
 
@@ -567,9 +608,9 @@ round0 = function(x,z){
 }
 
 df_long_trim %>%
-  group_by(pilot, id, trial, coordinate) %>%
+  group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::mutate(
-    norm_time = round0((zero_time-min(zero_time))/(max(zero_time)-min(zero_time)), 0.01)
+    norm_time = round0((zero_time-min(zero_time))/(max(zero_time)-min(zero_time)), 0.05)
     ) -> df_long_norm
 
 df_long_norm %>%
@@ -577,7 +618,7 @@ df_long_norm %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
   xlab("normalized time")+
-  ylab("position (x)")+
+  ylab("x position (mm)")+
   facet_grid(.~condition)+
   theme(legend.position = "none")
 
@@ -586,7 +627,7 @@ df_long_norm %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
   xlab("normalized time")+
-  ylab("position (y)")+
+  ylab("y position (mm)")+
   facet_grid(.~condition)+
   theme(legend.position = "none")
 
@@ -595,7 +636,7 @@ df_long_norm %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
   xlab("normalized time")+
-  ylab("position (z)")+
+  ylab("z position (mm)")+
   facet_grid(.~condition)+
   theme(legend.position = "none")
 
@@ -611,7 +652,7 @@ df_long_norm_avg %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position_avg, color = id, group = id), alpha = 0.5)+
   xlab("normalized time")+
-  ylab("position (x)")+
+  ylab("x position (mm)")+
   facet_grid(.~condition)
 
 df_long_norm_avg %>%
@@ -619,7 +660,7 @@ df_long_norm_avg %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position_avg, color = id, group = id), alpha = 0.5)+
   xlab("normalized time")+
-  ylab("position (y)")+
+  ylab("y position (mm)")+
   facet_grid(.~condition)
 
 df_long_norm_avg %>%
@@ -627,7 +668,7 @@ df_long_norm_avg %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position_avg, color = id, group = id), alpha = 0.5)+
   xlab("normalized time")+
-  ylab("position (z)")+
+  ylab("z position (mm)")+
   facet_grid(.~condition)
 
 # now we average over participants
@@ -642,22 +683,40 @@ df_long_norm_grand_avg %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position_grand_avg))+
   xlab("normalized time")+
-  ylab("position (x)")+
+  ylab("x position (mm)")+
   facet_grid(.~condition)
+df_long_norm_grand_avg %>%
+  dplyr::filter(coordinate == "x") %>%
+  ggplot()+
+  geom_line(aes(x=norm_time, y=position_grand_avg, group = condition, color = condition))+
+  xlab("normalized time")+
+  ylab("x position (mm)")
 
 df_long_norm_grand_avg %>%
   dplyr::filter(coordinate == "y") %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position_grand_avg))+
   xlab("normalized time")+
-  ylab("position (y)")+
+  ylab("y position (mm)")+
   facet_grid(.~condition)
+df_long_norm_grand_avg %>%
+  dplyr::filter(coordinate == "y") %>%
+  ggplot()+
+  geom_line(aes(x=norm_time, y=position_grand_avg, group = condition, color = condition))+
+  xlab("normalized time")+
+  ylab("y position (mm)")
 
 df_long_norm_grand_avg %>%
   dplyr::filter(coordinate == "z") %>%
   ggplot()+
   geom_line(aes(x=norm_time, y=position_grand_avg))+
   xlab("normalized time")+
-  ylab("position (z)")+
+  ylab("z position (mm)")+
   facet_grid(.~condition)
+df_long_norm_grand_avg %>%
+  dplyr::filter(coordinate == "z") %>%
+  ggplot()+
+  geom_line(aes(x=norm_time, y=position_grand_avg, group = condition, color = condition))+
+  xlab("normalized time")+
+  ylab("z position (mm)")
 
