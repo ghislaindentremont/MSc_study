@@ -214,7 +214,7 @@ try
     TARGET_X_CENTERED = xCenter*2/3;
     TARGET_Y_CENTERED = yCenter;
     
-    TARGET_X_BOUND = xCenter*4/3
+    TARGET_X_BOUND = xCenter*4/3;
 
 
     
@@ -246,7 +246,7 @@ try
     % have short practice before each block
     num_blocks = NUM_EXPERIMENTAL_BLOCKS + NUM_PRACTICE_BLOCKS;
     
-    NUM_PRACTICE_TRIALS = 5;
+    NUM_PRACTICE_TRIALS = 10;
 
     TRIALS_PER_CONDITION = 20;
     
@@ -260,6 +260,7 @@ try
     
     % initiate goggles
     PLATO_trial(1);
+    PLATO_lens(1);
     
     
     
@@ -481,7 +482,9 @@ try
             end
             %--------------------------------------------------------------
 
-
+            % set early/late variables to default 0
+            too_soon = 0;
+            too_late = 0;
             
             % make sure the finger is still on touching the screen before
             % presenting target
@@ -516,8 +519,6 @@ try
                 
             else
                 
-                too_soon=0;
-                
                 %--------------------- Draw Target ----------------------------
                 Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
                 Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR_TOUCHED, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
@@ -541,16 +542,20 @@ try
                    if toc>TARGET_TIME;
                        too_late=1;
                        startbutton=0;
+                       flicker = 1;
                        if rt>=1
                            rt=NaN;
+                           flicker = 0;
                        end
                        
                        xtarget=NaN;
                        ytarget=NaN;
                        
-                       % restore vision
-                       PLATO_trial(0);
-                       PLATO_trial(1);
+                       if strcmp(blocking_str, 'n') && (block == 1 || block == 2) && (flicker == 1)
+                            PLATO_lens(1);
+                       elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)  && (flicker == 1)
+                            PLATO_lens(1);
+                       end
                        
                         Screen('TextSize', window, FONT_SIZE); 
                         % get text bounds
@@ -582,11 +587,13 @@ try
                            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                            Screen('Flip', window);
                            
-                           % occlude vision
+                           % occlude vision 
                            if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
-                               PLATO_lens(1, 0, 0);
+                               PLATO_trial(0);
+                               PLATO_trial(1);
                            elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
-                               PLATO_lens(1, 0, 0);
+                               PLATO_trial(0);
+                               PLATO_trial(1);
                            end
                            movementstart=1;
                        % not pressed, but in movement
@@ -599,16 +606,13 @@ try
                            startbutton=1;
                        % pressed and in range
                        else
-                           too_late=0;
                            startbutton=0;
                            response_time = toc;
                            % restore vision
                            if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
-                               PLATO_trial(0);
-                               PLATO_trial(1);
+                                PLATO_lens(1);
                            elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)
-                               PLATO_trial(0);
-                               PLATO_trial(1);
+                                PLATO_lens(1);
                            end
                            
                            tic;
