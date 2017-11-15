@@ -197,7 +197,6 @@ try
     LINE_WIDTH_PIX = 5;
  
     FIX_COLOR = [1 1 1];
-    FIX_COLOR_TOUCHED = [0 1 0];
     
 
 
@@ -208,7 +207,6 @@ try
     TARGET_SIZE = 10;
     
     TARGET_COLOR = [1 1 1];  
-    TARGET_COLOR_TOUCHED = [0 1 0];
     
     % where is the target centered?
     TARGET_X_CENTERED = xCenter*2/3;
@@ -465,6 +463,7 @@ try
                % if button is pressed in proper area 
                else
                    startbutton=0;
+                   beep;
                end
             end
           
@@ -473,11 +472,11 @@ try
             iti = cond_matrix_shuffled(1,trial);
             iti_time_frames = round(iti / ifi / WAIT_FRAMES);
 
-            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR_TOUCHED, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
             vbl = Screen('Flip', window);
 
             for frame = 1:iti_time_frames-1
-                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR_TOUCHED, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                 vbl = Screen('Flip', window, vbl + (WAIT_FRAMES - 0.5) * ifi);
             end
             %--------------------------------------------------------------
@@ -521,7 +520,7 @@ try
                 
                 %--------------------- Draw Target ----------------------------
                 Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
-                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR_TOUCHED, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
+                Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                 Screen('Flip', window);
 
                 % setting touch screen cursor variables
@@ -582,7 +581,6 @@ try
                            % get reaction time 
                            rt = toc;
                            
-                           % change fixation color upon take off
                            Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
                            Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                            Screen('Flip', window);
@@ -607,6 +605,7 @@ try
                        % pressed and in range
                        else
                            startbutton=0;
+                           beep;
                            response_time = toc;
                            % restore vision
                            if strcmp(blocking_str, 'n') && (block == 1 || block == 2)
@@ -643,8 +642,7 @@ try
                                     
                                else
                                    
-                                   % change target color when reached or time up
-                                   Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR_TOUCHED, [], 4);
+                                   Screen('DrawDots', window, [TARGET_X_CENTERED; TARGET_Y_CENTERED], TARGET_SIZE, TARGET_COLOR, [], 4);
                                    Screen('DrawLines', window, all_fix_coords, LINE_WIDTH_PIX, FIX_COLOR, [FIX_X_CENTERED FIX_Y_CENTERED], 2);
                                    Screen('Flip', window);
                                    
