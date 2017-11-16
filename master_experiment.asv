@@ -548,9 +548,9 @@ try
                        xtarget=NaN;
                        ytarget=NaN;
                        
-                       if strcmp(blocking_str, 'n') && (block == 1 || block == 2) 
+                       if strcmp(blocking_str, 'n') && (block == 1 || block == 2) % && (flicker == 1)
                             PLATO_lens(1);
-                       elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)  
+                       elseif strcmp(blocking_str, 'v') && (block == 3 || block == 4)  % && (flicker == 1)
                             PLATO_lens(1);
                        end
                        
