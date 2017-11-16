@@ -25,10 +25,7 @@ dat = map_df(
 # matlab mappings:
 # [pilot id age sex hand year month day hour minute seconds blocking block trial iti blocking rt response_time too_soon too_late xfix yfix xtarget ytarget]
 
-names(dat) = c('pilot', 'id', 'age', 'sex', 'hand', 'year', 'month', 'day', 'hour', 'minute', 'seconds', 'blocking', 'block', 'trial', 'iti', 'blocking', 'rt', 'response_time', 'too_soon', 'too_late', 'xfix', 'yfix', 'xtarget', 'ytarget')
-
-# GET RID OF COLUMN DUPLICATE
-dat = dat[,-16]
+names(dat) = c('pilot', 'id', 'age', 'sex', 'hand', 'year', 'month', 'day', 'hour', 'minute', 'seconds', 'blocking', 'block', 'trial', 'iti', 'rt', 'response_time', 'too_soon', 'too_late', 'xfix', 'yfix', 'xtarget', 'ytarget')
 
 
 # Get Level Names ----
@@ -45,11 +42,11 @@ dat$too_late = ifelse(dat$too_late == 0, FALSE, TRUE)
 mean(dat$too_soon == 0 | dat$too_soon == 1)
 dat$too_soon = ifelse(dat$too_soon == 0, FALSE, TRUE)
 
-# get rid of practice
-dat = dat[dat$block == 2 | dat$block == 4,]
+# make practice block boolean - will later remove practice blocks
+dat$practice = factor(ifelse(dat$block == 1 | dat$block == 3, "practice", "experimental"))
 
 # make vision vs. no-vision conditions 
-dat$condition = factor(ifelse((dat$blocking == "vision" & dat$block == 2) | (dat$blocking == "no_vision" & dat$block == 4), "vision", "no_vision"))
+dat$condition = factor(ifelse((dat$blocking == "vision" & (dat$block == 1 | dat$block == 2)) | (dat$blocking == "no_vision" & (dat$block == 3 | dat$block == 4)), "vision", "no_vision"))
 
 
 # Summarize Data ----
@@ -60,16 +57,16 @@ dat$good_rt = dat$rt * 1000
 
 ggplot()+
   geom_histogram(data = subset(dat, condition == "no_vision"), aes(good_rt, ..density..), bins=20, alpha = 0.2, fill = "red")+
-  geom_density(data = subset(dat, condition == "no_vision"), aes(good_rt, ..density..), bins=20, color = "red")+
+  geom_density(data = subset(dat, condition == "no_vision"), aes(good_rt, ..density..), color = "red")+
   geom_histogram(data = subset(dat, condition == "vision"), aes(good_rt, ..density..), bins=20, alpha = 0.2, fill = "blue")+
-  geom_density(data = subset(dat, condition == "vision"), aes(good_rt, ..density..), bins=20, color = "blue")+
-  facet_wrap(~id)+
+  geom_density(data = subset(dat, condition == "vision"), aes(good_rt, ..density..), color = "blue")+
+  facet_wrap(practice~id)+
   xlab("reaction time (ms)")
 
 dat %>%
-  group_by(pilot, id, condition) %>%
+  dplyr::group_by(pilot, id, practice, condition) %>%
   dplyr::summarize(mean_id_rt = mean(good_rt, na.rm = T)) %>%
-  group_by(condition) %>%
+  dplyr::group_by(practice, condition) %>%
   dplyr::summarize(mean_rt = mean(mean_id_rt, na.rm = T))
   
 
@@ -78,16 +75,16 @@ dat$good_response_time = dat$response_time * 1000
 
 ggplot()+
   geom_histogram(data = subset(dat, condition == "no_vision"), aes(good_response_time, ..density..), bins=20, alpha = 0.2, fill = "red")+
-  geom_density(data = subset(dat, condition == "no_vision"), aes(good_response_time, ..density..), bins=20, color = "red")+
+  geom_density(data = subset(dat, condition == "no_vision"), aes(good_response_time, ..density..), color = "red")+
   geom_histogram(data = subset(dat, condition == "vision"), aes(good_response_time, ..density..), bins=20, alpha = 0.2, fill = "blue")+
-  geom_density(data = subset(dat, condition == "vision"), aes(good_response_time, ..density..), bins=20, color = "blue")+
-  facet_wrap(~id)+
+  geom_density(data = subset(dat, condition == "vision"), aes(good_response_time, ..density..), color = "blue")+
+  facet_wrap(practice~id)+
   xlab("response time (ms)")
 
 dat %>%
-  group_by(pilot, id, condition) %>%
+  dplyr::group_by(pilot, id, practice, condition) %>%
   dplyr::summarize(mean_id_response_time = mean(good_response_time, na.rm = T)) %>%
-  group_by(condition) %>%
+  dplyr::group_by(practice, condition) %>%
   dplyr::summarize(mean_response_time = mean(mean_id_response_time, na.rm = T))
 
 # movement time
@@ -95,21 +92,26 @@ dat$good_movement_time = dat$good_response_time - dat$good_rt
 
 ggplot()+
   geom_histogram(data = subset(dat, condition == "no_vision"), aes(good_movement_time, ..density..), bins=20, alpha = 0.2, fill = "red")+
-  geom_density(data = subset(dat, condition == "no_vision"), aes(good_movement_time, ..density..), bins=20, color = "red")+
+  geom_density(data = subset(dat, condition == "no_vision"), aes(good_movement_time, ..density..), color = "red")+
   geom_histogram(data = subset(dat, condition == "vision"), aes(good_movement_time, ..density..), bins=20, alpha = 0.2, fill = "blue")+
-  geom_density(data = subset(dat, condition == "vision"), aes(good_movement_time, ..density..), bins=20, color = "blue")+
-  facet_wrap(~id)+
+  geom_density(data = subset(dat, condition == "vision"), aes(good_movement_time, ..density..), color = "blue")+
+  facet_wrap(practice~id)+
   xlab("movement time (ms)")
 
 dat %>%
-  group_by(pilot, id, condition) %>%
+  dplyr::group_by(pilot, id, practice, condition) %>%
   dplyr::summarize(mean_id_movement_time = mean(good_movement_time, na.rm = T)) %>%
-  group_by(condition) %>%
+  dplyr::group_by(practice, condition) %>%
   dplyr::summarize(mean_movement_time = mean(mean_id_movement_time, na.rm = T))
 
 
 # define touch screen parameters in terms of participant coordinates
 mm_per_pixel =  0.26458333333333
+
+# what is the size of the target?
+# target is a dot
+target_diameter = 10
+target_size = mm_per_pixel * target_diameter
 
 xdim = 1080 * mm_per_pixel
 ydim = 1920 * mm_per_pixel
@@ -128,18 +130,19 @@ dat$good_yfix = ydim - dat$xfix * mm_per_pixel
 dat$good_xtarget = xdim - dat$ytarget * mm_per_pixel
 dat$good_ytarget = ydim - dat$xtarget * mm_per_pixel
 
-# target
+# just look at experimental data
 dat %>%
-  ggplot()+
-  geom_point(aes(x=good_xfix, y=good_yfix, group = id), na.rm = T, size = 0.25)+
-  geom_point(aes(x=xfixcoor, y=yfixcoor, group = id), na.rm = T, size = 0.5, color = "red")+
-  geom_point(aes(x=good_xtarget, y=good_ytarget, group = id), na.rm = T, size = 0.25)+
-  geom_point(aes(x=xtargetcoor, y=ytargetcoor, group = id), na.rm = T, size = 0.5, color = "red")+
-  xlim(c(0, xdim))+
-  ylim(c(0, ydim))+
-  xlab("x (mm)")+
-  ylab("y (mm)")+
-  facet_wrap(condition~id)
+  dplyr::filter(practice == "experimental") %>%
+    ggplot()+
+    geom_point(aes(x=good_xfix, y=good_yfix, group = id), na.rm = T, size = 0.25)+
+    geom_point(aes(x=xfixcoor, y=yfixcoor, group = id), na.rm = T, size = 0.5, color = "red")+
+    geom_point(aes(x=good_xtarget, y=good_ytarget, group = id), na.rm = T, size = 0.25)+
+    geom_point(aes(x=xtargetcoor, y=ytargetcoor, group = id), na.rm = T, size = 0.5, color = "red")+
+    xlim(c(0, xdim))+
+    ylim(c(0, ydim))+
+    xlab("x (mm)")+
+    ylab("y (mm)")+
+    facet_wrap(condition~id)
 
 # look at error 
 dat$fix_error = sqrt((dat$good_xfix - xfixcoor)^2 + (dat$good_yfix - yfixcoor)^2)
@@ -151,12 +154,78 @@ dat %>%
 
 
 
+# Bad Trial Information ----
+dat$ez_trial = ifelse(
+  dat$block == 1
+  , dat$trial
+  , ifelse(
+    dat$block == 2
+    , dat$trial + 10
+    , ifelse(
+      dat$block == 3
+      , dat$trial + 30
+      , dat$trial + 40
+    )
+  )
+)
+
+dat$touch_screen_error = ifelse(
+  (dat$id == 1 & (dat$ez_trial %in% c(17, 22, 24, 33, 34, 36, 39,51)))
+  | (dat$id == 2 & (dat$ez_trial %in% c(18, 21, 23, 28)))
+  | (dat$id == 3 & (dat$ez_trial %in% c(25, 31)))
+  , TRUE
+  , FALSE
+  )
+
+# look at 'too soons'!
+dat %>%
+  dplyr::group_by(pilot, id, practice, condition, touch_screen_error) %>%
+  dplyr::summarize(mean_id_too_soon = mean(too_soon)) %>%
+  dplyr::group_by(practice, condition, touch_screen_error) %>%
+  dplyr::summarize(mean_too_soon = mean(mean_id_too_soon))
+
+# look at 'too lates'!
+dat %>%
+  dplyr::group_by(pilot, id, practice, condition, touch_screen_error) %>%
+  dplyr::summarize(mean_id_too_late = mean(too_late)) %>%
+  dplyr::group_by(practice, condition, touch_screen_error) %>%
+  dplyr::summarize(mean_too_late = mean(mean_id_too_late))
+
+# Identify trials for which no optotrak information was collected or other optotrak or goggle error occured 
+dat$optotrak_error = ifelse(
+  (dat$id == 1 & (dat$ez_trial %in% c(12)))
+  | (dat$id == 3 & (dat$ez_trial %in% c(1, 2, 3)))
+  , TRUE
+  , FALSE
+)
+
+
+
+# Eliminate Bad Trials ----
+dat %>%
+  dplyr::filter(
+    practice == "experimental"
+    , too_soon == FALSE
+    , too_late == FALSE
+    , touch_screen_error == FALSE
+    , optotrak_error == FALSE
+  ) -> dat_clean
+
+# count trials 
+dat_clean %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarize(count = length(trial)) 
+  
+
+
+
+
 ##############################
 #       Optotrak
 ##############################
 
 # Read Data ----
-df = map_df(
+df_orig = map_df(
   .x = list.files(
     pattern = ".csv"
     , recursive = T
@@ -165,21 +234,21 @@ df = map_df(
   )
   , .f = function(file) {
     temp = strsplit(file, "/")[[1]]
-    id = substr(temp[10],2,2)
+    id = substr(temp[10],2,3)
     pilot = substr(temp[10],1,1)
     trial = as.numeric(substr(temp[11],10, 12))
     
-    if (trial <= 5) {
+    if (trial <= 10) {
       block = 1
-    } else if (trial <= 25) {
-      block = 2
-      trial = trial-5
     } else if (trial <= 30) {
+      block = 2
+      trial = trial - 10
+    } else if (trial <= 40) {
       block = 3
-      trial = trial - 25
+      trial = trial - 30 
     } else {
       block = 4
-      trial = trial - 30
+      trial = trial - 40
     }
     
     df_piece = read_csv(
@@ -196,20 +265,18 @@ df = map_df(
 )
 
 # only select first marker for now
-df %>%
-  dplyr::select(pilot, id, block, trial, Frame, `1-1`, `1-2`, `1-3`, `2-1`, `2-2`, `2-3`) -> df
+df_orig %>%
+  dplyr::select(pilot, id, block, trial, Frame, `1-1`, `1-2`, `1-3`, `2-1`, `2-2`, `2-3`) -> df_orig
 
-names(df)[5:11] = c("frame", "x", "y", "z", "x2", "y2", "z2")
-df$id = factor(df$id)
-df$trial = as.numeric(df$trial)
-df$pilot = factor(df$pilot, levels = c("p", "e"), labels = c("pilot", "experimental"))
+names(df_orig)[5:11] = c("frame", "x", "y", "z", "x2", "y2", "z2")
+df_orig$id = factor(as.numeric(df_orig$id))
+df_orig$trial = as.numeric(df_orig$trial)
+df_orig$pilot = factor(df_orig$pilot, levels = c("p", "e"), labels = c("pilot", "experimental"))
 
-# keep only experimental blocks 
-df = df[df$block == 2 | df$block == 4,]
 
 
 # Merge ---- 
-df = merge(df, dat)   # should merge based on block, trial, id ,and participant type
+df = merge(df_orig, dat_clean)   # should merge based on block, trial, id ,and participant type
 
 # the merge causes the order of frames to get messed up so we sort
 ptm = proc.time()
@@ -262,13 +329,16 @@ df %>%
 df$time = df$frame/200*1000
 
 # X
+xhi = 400
+xlo = 175
+
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=x), alpha = 0.2, size = .5)+
   xlab("time (ms)")+
   ylab("x position (mm)")+
-  geom_hline(yintercept = 275, color = "red")+  # high cut-off, applicable across participants
-  geom_hline(yintercept = 175, color = "red")+  # low cut-off, applicable across participants
+  geom_hline(yintercept = xhi, color = "red")+  # high cut-off, applicable across participants
+  geom_hline(yintercept = xlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
 
 # Y
@@ -280,19 +350,22 @@ df %>%
   facet_grid(.~condition)
 
 # Z
+zhi = -3150
+zlo = -3300
+
 df %>%
   ggplot()+
   geom_point(aes(x=time, y=z), alpha = 0.2, size = .5)+
   xlab("time (ms)")+
   ylab("z position (mm)")+
-  ylim(c(-3200,-3000))+
-  geom_hline(yintercept = -3075, color = "red")+  # high cut-off, applicable across participants
-  geom_hline(yintercept = -3150, color = "red")+  # low cut-off, applicable across participants
+  ylim(c(-3300,-3000))+
+  geom_hline(yintercept = zhi, color = "red")+  # high cut-off, applicable across participants
+  geom_hline(yintercept = zlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
 
 # replace odd points with other marker 
-df$x = ifelse(df$x > 275 | df$x < 175, df$x2, df$x)
-df$z = ifelse(df$z > -3075 | df$z < -3150 , df$z2, df$z)
+df$x = ifelse(df$x > xhi | df$x < xlo, df$x2, df$x)
+df$z = ifelse(df$z >  zhi | df$z < zlo , df$z2, df$z)
 
 # X
 df %>%
@@ -300,8 +373,8 @@ df %>%
   geom_point(aes(x=time, y=x), alpha = 0.2, size = .5)+
   xlab("time (ms)")+
   ylab("x position (mm)")+
-  geom_hline(yintercept = 275, color = "red")+  # high cut-off, applicable across participants
-  geom_hline(yintercept = 175, color = "red")+  # low cut-off, applicable across participants
+  geom_hline(yintercept = xhi, color = "red")+  # high cut-off, applicable across participants
+  geom_hline(yintercept = xlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
 
 # Y
@@ -318,9 +391,9 @@ df %>%
   geom_point(aes(x=time, y=z), alpha = 0.2, size = .5)+
   xlab("time (ms)")+
   ylab("z position (mm)")+
-  ylim(c(-3200,-3000))+
-  geom_hline(yintercept = -3075, color = "red")+  # high cut-off, applicable across participants
-  geom_hline(yintercept = -3150, color = "red")+  # low cut-off, applicable across participants
+  ylim(c(-3300,-3000))+
+  geom_hline(yintercept = zhi, color = "red")+  # high cut-off, applicable across participants
+  geom_hline(yintercept = zlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
 
 
@@ -328,8 +401,8 @@ df %>%
 df %>%
   dplyr::select(pilot, id, block, trial, time, x, y, z) %>%
   dplyr::filter(
-    (x > 275 | x < 175)
-    | (z > -3075| z < -3150)
+    (x > xhi | x < xlo)
+    | (z > zhi| z < zlo)
   ) %>%
   group_by(pilot, id, block, trial) %>%
   dplyr::summarise(dummy = mean(x)) -> df_exclude
@@ -341,8 +414,8 @@ aggregate(trial ~ pilot + id, data = df_exclude, FUN = length)
 # NOTE: ideally, we would interpolate 
 df %>% 
   dplyr::filter(
-  (x < 275 & x > 175)
-  & (z < -3075 & z > -3150)
+  (x < xhi & x > xlo)
+  & (z < zhi & z > zlo)
 ) -> df
   
 # verify
@@ -352,8 +425,8 @@ df %>%
   geom_point(aes(x=time, y=x), alpha = 0.2, size = .5)+
   xlab("time (ms)")+
   ylab("x position (mm)")+
-  geom_hline(yintercept = 275, color = "red")+  # high cut-off, applicable across participants
-  geom_hline(yintercept = 175, color = "red")+  # low cut-off, applicable across participants
+  geom_hline(yintercept = xhi, color = "red")+  # high cut-off, applicable across participants
+  geom_hline(yintercept = xlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
 
 # Y
@@ -370,9 +443,11 @@ df %>%
   geom_point(aes(x=time, y=z), alpha = 0.2, size = .5)+
   xlab("time (ms)")+
   ylab("z position (mm)")+
-  geom_hline(yintercept = -3075, color = "red")+  # high cut-off, applicable across participants
-  geom_hline(yintercept = -3150, color = "red")+  # low cut-off, applicable across participants
+  ylim(c(-3300,-3000))+
+  geom_hline(yintercept = zhi, color = "red")+  # high cut-off, applicable across participants
+  geom_hline(yintercept = zlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
+
 
 
 
@@ -619,7 +694,7 @@ df_long_norm %>%
   geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
   xlab("normalized time")+
   ylab("x position (mm)")+
-  facet_grid(.~condition)+
+  facet_grid(id~condition)+
   theme(legend.position = "none")
 
 df_long_norm %>%
@@ -628,7 +703,7 @@ df_long_norm %>%
   geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
   xlab("normalized time")+
   ylab("y position (mm)")+
-  facet_grid(.~condition)+
+  facet_grid(id~condition)+
   theme(legend.position = "none")
 
 df_long_norm %>%
@@ -637,7 +712,7 @@ df_long_norm %>%
   geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
   xlab("normalized time")+
   ylab("z position (mm)")+
-  facet_grid(.~condition)+
+  facet_grid(id~condition)+
   theme(legend.position = "none")
 
 # how do the id averages look?.. We average over trials
