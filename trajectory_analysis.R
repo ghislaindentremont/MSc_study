@@ -1,6 +1,7 @@
 library(tidyverse)
 library(plyr)
 library(forecast)
+library(signal)
 
 setwd("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/touch_screen")
 
@@ -142,7 +143,7 @@ dat %>%
     ylim(c(0, ydim))+
     xlab("x (mm)")+
     ylab("y (mm)")+
-    facet_wrap(condition~id)
+    facet_grid(condition~id)
 
 # look at error 
 dat$fix_error = sqrt((dat$good_xfix - xfixcoor)^2 + (dat$good_yfix - yfixcoor)^2)
@@ -173,11 +174,21 @@ dat$touch_screen_error = ifelse(
   (dat$id == 1 & (dat$ez_trial %in% c(17, 22, 24, 33, 34, 36, 39,51)))
   | (dat$id == 2 & (dat$ez_trial %in% c(18, 21, 23, 28)))
   | (dat$id == 3 & (dat$ez_trial %in% c(25, 31)))
+  | (dat$id == 4 & (dat$ez_trial %in% c(10, 11, 19, 23, 36, 41, 48)))
+  | (dat$id == 5 & (dat$ez_trial %in% c(11, 12, 14, 17, 22, 26)))
+  | (dat$id == 6 & (dat$ez_trial %in% c(5, 16, 32, 39, 46, 52, 54)))
+  | (dat$id == 7 & (dat$ez_trial %in% c())) 
   , TRUE
   , FALSE
   )
 
 # look at 'too soons'!
+dat %>%
+  dplyr::group_by(pilot, id, practice, condition) %>% 
+  dplyr::summarize(mean_id_too_soon = mean(too_soon)) %>%
+  dplyr::group_by(practice, condition) %>% 
+  dplyr::summarize(mean_too_soon = mean(mean_id_too_soon))
+# what proportion occur along with touch screen error?
 dat %>%
   dplyr::group_by(pilot, id, practice, condition, touch_screen_error) %>%
   dplyr::summarize(mean_id_too_soon = mean(too_soon)) %>%
@@ -186,15 +197,27 @@ dat %>%
 
 # look at 'too lates'!
 dat %>%
+  dplyr::group_by(pilot, id, practice, condition) %>% 
+  dplyr::summarize(mean_id_too_late = mean(too_late)) %>%
+  dplyr::group_by(practice, condition) %>%
+  dplyr::summarize(mean_too_late = mean(mean_id_too_late))
+# what proportion occur along with touch screen error?
+dat %>%
   dplyr::group_by(pilot, id, practice, condition, touch_screen_error) %>%
   dplyr::summarize(mean_id_too_late = mean(too_late)) %>%
   dplyr::group_by(practice, condition, touch_screen_error) %>%
   dplyr::summarize(mean_too_late = mean(mean_id_too_late))
 
+
 # Identify trials for which no optotrak information was collected or other optotrak or goggle error occured 
 dat$optotrak_error = ifelse(
   (dat$id == 1 & (dat$ez_trial %in% c(12)))
+  | (dat$id == 2 & (dat$ez_trial %in% c()))
   | (dat$id == 3 & (dat$ez_trial %in% c(1, 2, 3)))
+  | (dat$id == 4 & (dat$ez_trial %in% c(14)))
+  | (dat$id == 5 & (dat$ez_trial %in% c()))
+  | (dat$id == 6 & (dat$ez_trial %in% c()))
+  | (dat$id == 7 & (dat$ez_trial %in% c()))
   , TRUE
   , FALSE
 )
@@ -290,40 +313,50 @@ df = ddply(
 proc.time() - ptm
 
 
-# Examine Data ----
+
+# Lost Markers ----
 # there are huge outlying values!
 summary(df)
 
 # how many of these trials contain these outlying values?
 df %>%
-  dplyr::group_by(pilot, id, block, trial) %>%
-  dplyr::summarize(
-    meanx = mean(x)
-    , meany = mean(y)
-    , meanz = mean(z)
-  ) %>%
-  dplyr::filter(abs(meanx) > 1e25, abs(meany) > 1e25, abs(meanz) > 1e25) %>%
-  dplyr::summarize(num_trials = length(trial))
+  dplyr::filter(abs(x) > 1e25 | abs(y) > 1e25 | abs(z) > 1e25) %>%
+  dplyr::group_by(pilot, id, ez_trial) %>%
+  dplyr::summarize(dummy = mean(x)) %>%
+  dplyr::summarize(num_trials = length(ez_trial))
 
 # replace them with other marker
+# NOTE: in proposal, would only use other marker if 30 consecutive ms (6 samples) were lost. 
+# Otherwise, would just get rid of data point
 df$x = ifelse(abs(df$x) > 1e25, df$x2, df$x)
 df$y = ifelse(abs(df$y) > 1e25, df$y2, df$y)
 df$z = ifelse(abs(df$z) > 1e25, df$z2, df$z)
 
 # now, how many of these trials contain these outlying values?
 df %>%
-  dplyr::group_by(pilot, id, block, trial) %>%
-  dplyr::summarize(
-    meanx = mean(x)
-    , meany = mean(y)
-    , meanz = mean(z)
-  ) %>%
-  dplyr::filter(abs(meanx) > 1e25, abs(meany) > 1e25, abs(meanz) > 1e25) %>%
-  dplyr::summarize(num_trials = length(trial))
+  dplyr::filter(abs(x) > 1e25 | abs(y) > 1e25 | abs(z) > 1e25) %>%
+  dplyr::group_by(pilot, id, ez_trial) %>%
+  dplyr::summarize(dummy = mean(x)) %>%
+  dplyr::summarize(num_trials = length(ez_trial))
 
-# get rid of the remaining extreme trials
+# replace remaining extreme trials with median value (basically, extremely simple interpolation)
+df$x = ifelse(abs(df$x) > 1e25, median(df$x), df$x)
+df$y = ifelse(abs(df$y) > 1e25, median(df$y), df$y)
+df$z = ifelse(abs(df$z) > 1e25, median(df$z), df$z)
+# do the same for the secondary markers
+df$x2 = ifelse(abs(df$x2) > 1e25, median(df$x2), df$x2)
+df$y2 = ifelse(abs(df$y2) > 1e25, median(df$y2), df$y2)
+df$z2 = ifelse(abs(df$z2) > 1e25, median(df$z2), df$z2)
+
+# verify that the values have been replaced
 df %>%
-  dplyr::filter(x >-10000, y >-10000, z>-10000, z< -2000, x2 >-10000, y2 >-10000, z2>-10000, z2< -2000) -> df
+  dplyr::filter(abs(x) > 1e25 | abs(y) > 1e25 | abs(z) > 1e25) %>%
+  dplyr::group_by(pilot, id, ez_trial) %>%
+  dplyr::summarize(dummy = mean(x)) %>%
+  dplyr::summarize(num_trials = length(ez_trial))
+
+
+# Outliers ----
 
 # create time variable (ms) from frame variable
 df$time = df$frame/200*1000
@@ -363,6 +396,13 @@ df %>%
   geom_hline(yintercept = zlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
 
+# how many are there?
+df %>%
+  dplyr::filter(x > xhi | x < xlo | z > zhi | z < zlo) %>%
+  dplyr::group_by(pilot, id, ez_trial) %>%
+  dplyr::summarize(dummy = mean(x)) %>%
+  dplyr::summarize(num_trials = length(ez_trial))
+
 # replace odd points with other marker 
 df$x = ifelse(df$x > xhi | df$x < xlo, df$x2, df$x)
 df$z = ifelse(df$z >  zhi | df$z < zlo , df$z2, df$z)
@@ -396,27 +436,16 @@ df %>%
   geom_hline(yintercept = zlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
 
-
-# identify trials that exceed thresholds
+# now, how many are there?
 df %>%
-  dplyr::select(pilot, id, block, trial, time, x, y, z) %>%
-  dplyr::filter(
-    (x > xhi | x < xlo)
-    | (z > zhi| z < zlo)
-  ) %>%
-  group_by(pilot, id, block, trial) %>%
-  dplyr::summarise(dummy = mean(x)) -> df_exclude
+  dplyr::filter(x > xhi | x < xlo | z > zhi | z < zlo) %>%
+  dplyr::group_by(pilot, id, ez_trial) %>%
+  dplyr::summarize(dummy = mean(x)) %>%
+  dplyr::summarize(num_trials = length(ez_trial))
 
-# look at which trials are excluded, for each participant
-aggregate(trial ~ pilot + id, data = df_exclude, FUN = length)
-
-# there are too many so we get rid of data points that exceed threshold 
-# NOTE: ideally, we would interpolate 
-df %>% 
-  dplyr::filter(
-  (x < xhi & x > xlo)
-  & (z < zhi & z > zlo)
-) -> df
+# there are too many so we do most basic interpolation on data that exceed threshold
+df$x = ifelse(df$x > xhi | df$x < xlo, median(df$x), df$x)
+df$z = ifelse(df$z >  zhi | df$z < zlo , median(df$z), df$z)
   
 # verify
 # X
@@ -448,6 +477,13 @@ df %>%
   geom_hline(yintercept = zlo, color = "red")+  # low cut-off, applicable across participants
   facet_grid(.~condition)
 
+# finally, how many are there?
+df %>%
+  dplyr::filter(x > xhi | x < xlo | z > zhi | z < zlo) %>%
+  dplyr::group_by(pilot, id, ez_trial) %>%
+  dplyr::summarize(dummy = mean(x)) %>%
+  dplyr::summarize(num_trials = length(ez_trial))
+
 
 
 
@@ -458,10 +494,60 @@ df %>%
 
 
 
+# Filtering ----
+# want low pass butterworth filter (zero-shift) with 8 Hz cutoff
+
+# filter order of 2 (first argument) according to documentation
+bf = butter(2, 8/(200/2), type = "low")
+
+# make copy for renaming purpose (lazy)
+df_long$unfil_position = df_long$position
+
+df_long %>%
+  dplyr::group_by(pilot, id, block, coordinate, trial) %>%
+  dplyr::mutate(position = signal::filtfilt(bf, unfil_position)) -> df_long
+
+# look at result
+edge_line = 150
+
+df_long %>%
+  dplyr::filter(coordinate == "x") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial, group = trial), alpha = 0.5)+
+  xlab("time (ms)")+
+  ylab("x position (mm)")+
+  facet_grid(id~condition)+
+  geom_vline(xintercept = edge_line, color = "red")+
+  theme(legend.position = "none")
+
+df_long %>%
+  dplyr::filter(coordinate == "y") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial, group = trial), alpha = 0.5)+
+  xlab("time (ms)")+
+  ylab("y position (mm)")+
+  facet_grid(id~condition)+
+  geom_vline(xintercept = edge_line, color = "red")+
+  theme(legend.position = "none")
+
+df_long %>%
+  dplyr::filter(coordinate == "z") %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color = trial, group = trial), alpha = 0.5)+
+  xlab("time (ms)")+
+  ylab("z position (mm)")+
+  facet_grid(id~condition)+
+  geom_vline(xintercept = edge_line, color = "red")+
+  theme(legend.position = "none")
+
+# get rid of edge effect at beginning
+df_long %>% dplyr::filter(time > edge_line) -> df_long
+
+
 # Derivatives ----
 df_long$velocity = c(0, diff(df_long$position))
 
-df_long %>% dplyr::filter(frame != 1) -> df_long_clean  # getting rid of first frame
+df_long %>% dplyr::filter(time != edge_line + 1000/200) -> df_long_clean  # getting rid of first frame
 
 
 
@@ -607,7 +693,7 @@ df_long_trim %>%
   ggplot()+
   geom_line(aes(x=zero_time, y=position, color = trial, group = trial), alpha = 0.5)+
   xlab("time (ms)")+
-  ylab("y position (mm)")+
+  ylab("z position (mm)")+
   facet_grid(id~condition)+
   theme(legend.position = "none")
 
