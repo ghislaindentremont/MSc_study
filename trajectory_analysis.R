@@ -767,25 +767,47 @@ df_long$acceleration = c(0, diff(df_long$velocity))/(1/sampling_freq)
 df_long %>% dplyr::filter(time != edge_line + 1000/sampling_freq) -> df_long_clean  # getting rid of first frame
 # rm(df_long)
 
-# visualize velocity in primary movement axis
-df_long_clean %>%
-  dplyr::filter(coordinate == "y") %>% #, id =="3", trial == 4) %>%
-  ggplot()+
-  geom_line(aes(x=time, y=velocity, color = trial, group = trial), alpha = 0.5)+
-  xlab("time (ms)")+
-  ylab("y velocity")+
-  ylim(c(-500, 2000))+
-  facet_grid(id~condition)+
-  theme(legend.position = "none")
-# df_long_clean %>%
-#   dplyr::filter(coordinate == "y") %>% #, id =="3", trial == 4) %>%
-#   ggplot()+
-#   geom_line(aes(x=time, y=acceleration, color = trial, group = trial), alpha = 0.5)+
-#   xlab("time (ms)")+
-#   ylab("y acceleration")+
-#   ylim(c(-500, 2000))+
-#   facet_grid(id~condition)+
-#   theme(legend.position = "none")
+# create function to plot velocity and acceleration
+plot_devs = function(ids_use, dv, dev = "velocity") {
+  df_long_clean$temp = dplyr::pull(df_long_clean, dev)
+  
+  df_long_clean %>%
+    dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=time, y=temp, group=trial, color=trial), alpha = 0.5, size = .2)+
+    xlab("time (ms)")+
+    ylab(sprintf("%s %s", dv, dev))+
+    facet_grid(condition~id) %>% print()
+}
+
+# DEVS ARE TOO NOISY
+# # Velocity
+# # X
+# plot_devs(1:10, "x")
+# plot_devs(11:20, "x")
+# plot_devs(21:30, "x")
+# # Y
+# plot_devs(1:10, "y")
+# plot_devs(11:20, "y")
+# plot_devs(21:30, "y")
+# # Z
+# plot_devs(1:10, "z")
+# plot_devs(11:20, "z")
+# plot_devs(21:30, "z")
+# 
+# # Acceleration
+# # X
+# plot_devs(1:10, "x", "acceleration")
+# plot_devs(11:20, "x", "acceleration")
+# plot_devs(21:30, "x", "acceleration")
+# # Y
+# plot_devs(1:10, "y", "acceleration")
+# plot_devs(11:20, "y", "acceleration")
+# plot_devs(21:30, "y", "acceleration")
+# # Z
+# plot_devs(1:10, "z", "acceleration")
+# plot_devs(11:20, "z", "acceleration")
+# plot_devs(21:30, "z", "acceleration")
 
 
 
@@ -850,22 +872,18 @@ df_long_clean$trial_end_frame = df_long_clean$trial_end_bool_2 * df_long_clean$f
 #   ) -> df_long_clean
 
 # give some space 
-buffer_start = 20
-buffer_end = 20
+buffer_start = 100
+buffer_start_ms = buffer_start * 1000/200
+
+buffer_end = 100
+buffer_end_ms = buffer_end * 1000/200
+
 df_long_clean %>%
   group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::mutate(
     trial_start = sort(unique(trial_start_frame))[2] - ma_length/2 - buffer_start   # we pick the second lowest because there are many zeroes
     , trial_end = sort(unique(trial_end_frame))[2] + buffer_end  # we pick the second lowest because there are many -1s
   ) -> df_long_clean
-
-# check how many trials are left now
-df_long_clean %>%
-  group_by(pilot, id, condition) %>%
-  dplyr::summarize(
-    trial_count = length(unique(trial))
-  ) %>%
-  print(n=60)
 
 df_long_clean %>%
   dplyr::filter(
@@ -879,46 +897,30 @@ df_long_trim %>%
     zero_time = time - min(time)  # grouping works for min()
   ) -> df_long_trim
 
+# create function to plot trimmed data 
+plot_trim = function(ids_use, dv) {
+  
+  df_long_trim %>%
+    dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=zero_time, y=position, group=trial, color=trial), alpha = 0.5, size = .2)+
+    xlab("time (ms)")+
+    ylab(sprintf("%s position", dv))+
+    facet_grid(condition~id) %>% print()
+}
 
-# # look at velocity again
-# df_long_trim %>%
-#   dplyr::filter(coordinate == "y") %>%
-#   ggplot()+
-#   geom_line(aes(x=time, y=velocity, color = trial, group = trial), alpha = 0.5)+
-#   xlab("time (ms)")+
-#   ylab("y velocity (mm)")+
-#   ylim(c(-500, 2000))+
-#   facet_grid(id~condition)+
-#   theme(legend.position = "none")
-
-
-# do the trajectories line up?
-df_long_trim %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("time (ms)")+
-  ylab("x position (mm)")+
-  facet_grid(id~condition)+
-  theme(legend.position = "none")
-
-df_long_trim %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("time (ms)")+
-  ylab("y position (mm)")+
-  facet_grid(id~condition)+
-  theme(legend.position = "none")
-
-df_long_trim %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("time (ms)")+
-  ylab("z position (mm)")+
-  facet_grid(id~condition)+
-  theme(legend.position = "none")
+# X
+plot_trim(1:10, "x")
+plot_trim(11:20, "x")
+plot_trim(21:30, "x")
+# Y
+plot_trim(1:10, "y")
+plot_trim(11:20, "y")
+plot_trim(21:30, "y")
+# Z
+plot_trim(1:10, "z")
+plot_trim(11:20, "z")
+plot_trim(21:30, "z")
 
 
 
