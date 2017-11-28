@@ -238,6 +238,7 @@ dat$touch_screen_error = ifelse(
   | (dat$id == 26 & (dat$ez_trial %in% c()))
   | (dat$id == 27 & (dat$ez_trial %in% c(12, 15, 16, 31, 41, 43, 50, 51, 52, 53, 55, 56)))
   | (dat$id == 28 & (dat$ez_trial %in% c(1, 3, 20, 24)))
+  | (dat$id == 29 & (dat$ez_trial %in% c(21)))
   , TRUE
   , FALSE
   )
@@ -299,6 +300,7 @@ dat$optotrak_error = ifelse(
   | (dat$id == 26 & (dat$ez_trial %in% c()))
   | (dat$id == 27 & (dat$ez_trial %in% c(1:10)))
   | (dat$id == 28 & (dat$ez_trial %in% c()))
+  | (dat$id == 29 & (dat$ez_trial %in% c()))
   , TRUE
   , FALSE
 )
@@ -649,7 +651,16 @@ plot_points(21:30, "z", c(-3250, -3150), T)
 
 
 
+
+##########################################################
+####             Signal Processing                    ####
+##########################################################
+
 # Long Format ----
+# create time variable (ms) from frame variable
+sampling_freq = 200
+df$time = df$frame/sampling_freq*1000
+
 df %>%
   dplyr::select(-x2, -y2, -z2) %>%
   gather(coordinate, position, x:z, factor_key = T) -> df_long
@@ -692,10 +703,6 @@ plot_long(21:30, "z")
 # Filtering ----
 # want low pass butterworth filter (zero-shift) with 8 Hz cutoff
 
-# create time variable (ms) from frame variable
-sampling_freq = 200
-df$time = df$frame/sampling_freq*1000
-
 # filter order is first argument according to documentation
 filter_order = 6
 hi_cutoff = 8
@@ -710,7 +717,7 @@ df_long %>%
   dplyr::mutate(position = signal::filtfilt(bf, unfil_position)) -> df_long
 
 # look at result
-edge_line = 0
+edge_line = 50
 
 # X
 plot_long(1:10, "x", edge_line)
@@ -736,7 +743,7 @@ df_long %>% dplyr::filter(time > edge_line) -> df_long
 # how far should the fixation* and target be apart?
 (ytargetcoor - yfixcoor)
 # what are the cutoffs for trial start and end?
-start_line = 30
+start_line = 50
 end_line = 270
 
 plot_bounds = function(ids_use, dv, start_line, end_line) {
@@ -815,10 +822,7 @@ plot_devs = function(ids_use, dv, dev = "velocity") {
 # ensure order of data
 df_long_clean %>% dplyr::arrange(pilot, id, condition, trial, coordinate, time) -> df_long_clean
 
-# # movement start and end parameters 
-# start_velocity = 500
-# end_velocity = 500
-
+# determine when thresholds are exceeded in primary movement axis
 df_long_clean %>%
   dplyr::select(pilot, id, condition, trial, coordinate, time, position) %>%
   spread(coordinate, position) %>%
@@ -897,6 +901,13 @@ df_long_trim %>%
     zero_time = time - min(time)  # grouping works for min()
   ) -> df_long_trim
 
+
+
+
+##########################################################
+####             Visualize Waveforms                  ####
+##########################################################
+
 # create function to plot trimmed data 
 plot_trim = function(ids_use, dv) {
   
@@ -905,7 +916,7 @@ plot_trim = function(ids_use, dv) {
     ggplot()+
     geom_line(aes(x=zero_time, y=position, group=trial, color=trial), alpha = 0.5, size = .2)+
     xlab("time (ms)")+
-    ylab(sprintf("%s position", dv))+
+    ylab(sprintf("%s position (mm)", dv))+
     facet_grid(condition~id) %>% print()
 }
 
@@ -924,68 +935,71 @@ plot_trim(21:30, "z")
 
 
 
-# Averages ----
+# Participant Averages ----
 df_long_trim %>%
   group_by(pilot, id, condition, coordinate, zero_time) %>%
   dplyr::summarise(
     position_avg = mean(position)
   ) -> df_long_trim_avg
 
-df_long_trim_avg %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("time (ms)")+
-  ylab("x position (mm)")+
-  facet_grid(.~condition)
+plot_trim_avg = function(ids_use, dv) {
+  
+  df_long_trim_avg %>%
+    dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=zero_time, y=position_avg, group=id, color=id), alpha = 0.5, size = .2)+
+    xlab("time (ms)")+
+    ylab(sprintf("%s average position (mm)", dv))+
+    facet_grid(.~condition) %>% print()
+}
 
-df_long_trim_avg %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("time (ms)")+
-  ylab("y position (mm)")+
-  facet_grid(.~condition)
+# X
+plot_trim_avg(1:10, "x")
+plot_trim_avg(11:20, "x")
+plot_trim_avg(21:30, "x")
+# Y
+plot_trim_avg(1:10, "y")
+plot_trim_avg(11:20, "y")
+plot_trim_avg(21:30, "y")
+# Z
+plot_trim_avg(1:10, "z")
+plot_trim_avg(11:20, "z")
+plot_trim_avg(21:30, "z")
 
-df_long_trim_avg %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("time (ms)")+
-  ylab("z position (mm)")+
-  facet_grid(.~condition)
 
-# take averages over participants
+
+# Group Averages ----
 df_long_trim_avg %>%
   group_by(condition, coordinate, zero_time) %>%
   dplyr::summarise(
     position_grand_avg = mean(position_avg)
   ) -> df_long_trim_grand_avg
 
-df_long_trim_grand_avg %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position_grand_avg))+
-  xlab("time (ms)")+
-  ylab("x position (mm)")+
-  facet_grid(.~condition)
+plot_trim_grand_avg = function(dv) {
+  
+  df_long_trim_grand_avg %>%
+    dplyr::filter(coordinate == dv) %>%
+    ggplot()+
+    geom_line(aes(x=zero_time, y=position_grand_avg))+
+    xlab("time (ms)")+
+    ylab(sprintf("%s grand average position", dv))+
+    facet_grid(.~condition) %>% print()
+}
 
-df_long_trim_grand_avg %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position_grand_avg))+
-  xlab("time (ms)")+
-  ylab("y position (mm)")+
-  facet_grid(.~condition)
+# X
+plot_trim_grand_avg("x")
+# Y
+plot_trim_grand_avg("y")
+# Z
+plot_trim_grand_avg("z")
 
-df_long_trim_grand_avg %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=zero_time, y=position_grand_avg))+
-  xlab("time (ms)")+
-  ylab("z position (mm)")+
-  facet_grid(.~condition)
 
+
+
+
+##########################################################
+####            Normalized Waveforms                  ####
+##########################################################
 
 
 # Normalize ----
@@ -994,68 +1008,75 @@ round0 = function(x,z){
 }
 
 df_long_trim %>%
-  group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::mutate(
     norm_time = round0((zero_time-min(zero_time))/(max(zero_time)-min(zero_time)), 0.05)
-    ) -> df_long_norm
+    ) -> df_long_norm2
 
-df_long_norm %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("x position (mm)")+
-  facet_grid(id~condition)+
-  theme(legend.position = "none")
+df_long_norm2 %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate, norm_time) %>%
+  dplyr::mutate(
+    norm_position = mean(position)
+  ) -> df_long_norm
 
-df_long_norm %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("y position (mm)")+
-  facet_grid(id~condition)+
-  theme(legend.position = "none")
+# create function to plot norm data 
+plot_norm = function(ids_use, dv) {
+  
+  df_long_norm %>%
+    dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=norm_time, y=norm_position, group=trial, color=trial), alpha = 0.5, size = .2)+
+    xlab("normalized time")+
+    ylab(sprintf("%s position (mm)", dv))+
+    facet_grid(condition~id) %>% print()
+}
 
-df_long_norm %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position, color = trial, group = trial), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("z position (mm)")+
-  facet_grid(id~condition)+
-  theme(legend.position = "none")
+# X
+plot_norm(1:10, "x")
+plot_norm(11:20, "x")
+plot_norm(21:30, "x")
+# Y
+plot_norm(1:10, "y")
+plot_norm(11:20, "y")
+plot_norm(21:30, "y")
+# Z
+plot_norm(1:10, "z")
+plot_norm(11:20, "z")
+plot_norm(21:30, "z")
 
-# how do the id averages look?.. We average over trials
+
+
+# Normalized Averages ----
 df_long_norm %>%
   group_by(pilot, id, condition, coordinate, norm_time) %>%
   dplyr::summarise(
-    position_avg = mean(position)
+    position_avg = mean(norm_position)
   ) -> df_long_norm_avg
 
-df_long_norm_avg %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("x position (mm)")+
-  facet_grid(.~condition)
+plot_norm_avg = function(ids_use, dv) {
+  
+  df_long_norm_avg %>%
+    dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=norm_time, y=position_avg, group=id, color=id), size = .2)+
+    xlab("normalized time")+
+    ylab(sprintf("%s average position (mm)", dv))+
+    facet_grid(.~condition) %>% print()
+}
 
-df_long_norm_avg %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("y position (mm)")+
-  facet_grid(.~condition)
+# X
+plot_norm_avg(1:10, "x")
+plot_norm_avg(11:20, "x")
+plot_norm_avg(21:30, "x")
+# Y
+plot_norm_avg(1:10, "y")
+plot_norm_avg(11:20, "y")
+plot_norm_avg(21:30, "y")
+# Z
+plot_norm_avg(1:10, "z")
+plot_norm_avg(11:20, "z")
+plot_norm_avg(21:30, "z")
 
-df_long_norm_avg %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_avg, color = id, group = id), alpha = 0.5)+
-  xlab("normalized time")+
-  ylab("z position (mm)")+
-  facet_grid(.~condition)
 
 # now we average over participants
 df_long_norm_avg %>%
@@ -1064,45 +1085,19 @@ df_long_norm_avg %>%
     position_grand_avg = mean(position_avg)
   ) -> df_long_norm_grand_avg
 
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg))+
-  xlab("normalized time")+
-  ylab("x position (mm)")+
-  facet_grid(.~condition)
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "x") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg, group = condition, color = condition))+
-  xlab("normalized time")+
-  ylab("x position (mm)")
+plot_norm_grand_avg = function(dv) {
+  
+  df_long_norm_grand_avg %>%
+    dplyr::filter(coordinate == dv) %>%
+    ggplot()+
+    geom_line(aes(x=norm_time, y=position_grand_avg, group=condition, color=condition))+
+    xlab("normalized time")+
+    ylab(sprintf("%s grand average position (mm)", dv)) %>% print()
+}
 
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg))+
-  xlab("normalized time")+
-  ylab("y position (mm)")+
-  facet_grid(.~condition)
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "y") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg, group = condition, color = condition))+
-  xlab("normalized time")+
-  ylab("y position (mm)")
-
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg))+
-  xlab("normalized time")+
-  ylab("z position (mm)")+
-  facet_grid(.~condition)
-df_long_norm_grand_avg %>%
-  dplyr::filter(coordinate == "z") %>%
-  ggplot()+
-  geom_line(aes(x=norm_time, y=position_grand_avg, group = condition, color = condition))+
-  xlab("normalized time")+
-  ylab("z position (mm)")
-
+# X
+plot_norm_grand_avg("x")
+# Y
+plot_norm_grand_avg("y")
+# Z
+plot_norm_grand_avg("z")
