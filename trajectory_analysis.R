@@ -876,10 +876,10 @@ df_long_clean$trial_end_frame = df_long_clean$trial_end_bool_2 * df_long_clean$f
 #   ) -> df_long_clean
 
 # give some space 
-buffer_start = 100
+buffer_start = 20
 buffer_start_ms = buffer_start * 1000/200
 
-buffer_end = 100
+buffer_end = 20
 buffer_end_ms = buffer_end * 1000/200
 
 df_long_clean %>%
@@ -898,7 +898,7 @@ df_long_clean %>%
 df_long_trim %>%
   group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::mutate(
-    zero_time = time - min(time)  # grouping works for min()
+    zero_time = round(time - min(time))  # grouping works for min()
   ) -> df_long_trim
 
 
@@ -939,7 +939,7 @@ plot_trim(21:30, "z")
 df_long_trim %>%
   group_by(pilot, id, condition, coordinate, zero_time) %>%
   dplyr::summarise(
-    position_avg = mean(position)
+    position_avg = median(position) # MEDIAN
   ) -> df_long_trim_avg
 
 plot_trim_avg = function(ids_use, dv) {
@@ -947,7 +947,7 @@ plot_trim_avg = function(ids_use, dv) {
   df_long_trim_avg %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=zero_time, y=position_avg, group=id, color=id), alpha = 0.5, size = .2)+
+    geom_line(aes(x=zero_time, y=position_avg, group=id, color=id), alpha = 0.5, size = .5)+
     xlab("time (ms)")+
     ylab(sprintf("%s average position (mm)", dv))+
     facet_grid(.~condition) %>% print()
@@ -972,7 +972,7 @@ plot_trim_avg(21:30, "z")
 df_long_trim_avg %>%
   group_by(condition, coordinate, zero_time) %>%
   dplyr::summarise(
-    position_grand_avg = mean(position_avg)
+    position_grand_avg = median(position_avg) # MEDIAN
   ) -> df_long_trim_grand_avg
 
 plot_trim_grand_avg = function(dv) {
@@ -1016,7 +1016,7 @@ df_long_trim %>%
 df_long_norm2 %>%
   dplyr::group_by(pilot, id, condition, trial, coordinate, norm_time) %>%
   dplyr::mutate(
-    norm_position = mean(position)
+    norm_position = median(position) # MEDIAN
   ) -> df_long_norm
 
 # create function to plot norm data 
@@ -1050,7 +1050,7 @@ plot_norm(21:30, "z")
 df_long_norm %>%
   group_by(pilot, id, condition, coordinate, norm_time) %>%
   dplyr::summarise(
-    position_avg = mean(norm_position)
+    position_avg = median(norm_position) # MEDIAN
   ) -> df_long_norm_avg
 
 plot_norm_avg = function(ids_use, dv) {
@@ -1058,7 +1058,7 @@ plot_norm_avg = function(ids_use, dv) {
   df_long_norm_avg %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=norm_time, y=position_avg, group=id, color=id), size = .2)+
+    geom_line(aes(x=norm_time, y=position_avg, group=id, color=id), size = .3)+
     xlab("normalized time")+
     ylab(sprintf("%s average position (mm)", dv))+
     facet_grid(.~condition) %>% print()
@@ -1082,7 +1082,7 @@ plot_norm_avg(21:30, "z")
 df_long_norm_avg %>%
   group_by(condition, coordinate, norm_time) %>%
   dplyr::summarise(
-    position_grand_avg = mean(position_avg)
+    position_grand_avg = median(position_avg) # MEDIAN
   ) -> df_long_norm_grand_avg
 
 plot_norm_grand_avg = function(dv) {
@@ -1101,3 +1101,63 @@ plot_norm_grand_avg("x")
 plot_norm_grand_avg("y")
 # Z
 plot_norm_grand_avg("z")
+
+
+
+
+##########################################################
+####          Spatial Variability Profiles            ####
+##########################################################
+
+df_long_norm %>%
+  dplyr::group_by(pilot, id, condition, coordinate, norm_time) %>%
+  dplyr::summarise(spat_var = sd(norm_position)) -> df_long_spat_var
+
+# function to plot spatial variability
+plot_spat_var = function(ids_use, dv) {
+  
+  df_long_spat_var %>%
+    dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=norm_time, y=spat_var, group=id, color=id), alpha = 0.5, size = .5)+
+    xlab("normalized time")+
+    ylab(sprintf("%s spatial variability (sd)", dv))+
+    facet_grid(.~condition) %>% print()
+}
+
+# X
+plot_spat_var(1:10, "x")
+plot_spat_var(11:20, "x")
+plot_spat_var(21:30, "x")
+# Y
+plot_spat_var(1:10, "y")
+plot_spat_var(11:20, "y")
+plot_spat_var(21:30, "y")
+# Z
+plot_spat_var(1:10, "z")
+plot_spat_var(11:20, "z")
+plot_spat_var(21:30, "z")
+
+
+# Average of Spatial Variabilty Profiles ----
+df_long_spat_var %>%
+  dplyr::group_by(condition, coordinate, norm_time) %>%
+  dplyr::summarise(spat_var_avg = median(spat_var)) -> df_long_spat_var_avg  # MEDIAN
+
+# a function to plot group spatial variability profiles
+plot_spat_var_avg = function(dv) {
+  
+  df_long_spat_var_avg %>%
+    dplyr::filter(coordinate == dv) %>%
+    ggplot()+
+    geom_line(aes(x=norm_time, y=spat_var_avg, group=condition, color=condition))+
+    xlab("normalized time")+
+    ylab(sprintf("%s average spatial variability (sd)", dv)) %>% print()
+}
+
+# X
+plot_spat_var_avg("x")
+# Y
+plot_spat_var_avg("y")
+# Z
+plot_spat_var_avg("z")
