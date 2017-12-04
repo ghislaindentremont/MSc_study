@@ -2,6 +2,8 @@ library(tidyverse)
 library(plyr)
 library(forecast)
 library(signal)
+library(zoo)
+library(imputeTS)
 
 setwd("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/touch_screen")
 
@@ -96,7 +98,16 @@ plot_outcomes = function(ids_use, dv, xlabel, summa = F) {
       dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
       dplyr::group_by(practice, condition) %>%
       dplyr::summarize(sd_tot = sd(mean_id, na.rm = T))%>%
-      print
+      print()
+    # sd of difference
+    dat %>%
+      dplyr::group_by(pilot, id, practice, condition) %>%
+      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+      dplyr::group_by(pilot, id, practice) %>%
+      dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
+      dplyr::group_by(practice) %>%
+      dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
+      print()
   }
 }
 
@@ -106,7 +117,7 @@ dat$good_rt = dat$rt * 1000
 
 plot_outcomes(1:10, "good_rt", "reaction time")
 plot_outcomes(11:20, "good_rt", "reaction time")
-plot_outcomes(21:30, "good_rt", "reaction time", T)
+plot_outcomes(21:33, "good_rt", "reaction time", T)
 
 
 # Response Time ----
@@ -114,7 +125,7 @@ dat$good_response_time = dat$response_time * 1000
 
 plot_outcomes(1:10, "good_response_time", "response time")
 plot_outcomes(11:20, "good_response_time", "response time")
-plot_outcomes(21:30, "good_response_time", "response time", T)
+plot_outcomes(21:33, "good_response_time", "response time", T)
 
 
 # Movement Time ----
@@ -122,7 +133,7 @@ dat$good_movement_time = dat$good_response_time - dat$good_rt
 
 plot_outcomes(1:10, "good_movement_time", "movement time")
 plot_outcomes(11:20, "good_movement_time", "movement time")
-plot_outcomes(21:30, "good_movement_time", "movement time", T)
+plot_outcomes(21:33, "good_movement_time", "movement time", T)
 
 
 # Movement Error ----
@@ -172,7 +183,7 @@ plot_error = function(ids_use) {
 # use function
 plot_error(1:10)
 plot_error(11:20)
-plot_error(21:30)
+plot_error(21:33)
 
 # look at error 
 dat$fix_error = sqrt((dat$good_xfix - xfixcoor)^2 + (dat$good_yfix - yfixcoor)^2)
@@ -188,6 +199,14 @@ dat %>%
   dplyr::summarize(mean_id_target_error = mean(target_error, na.rm = T)) %>%
   group_by(practice, condition) %>%
   dplyr::summarize(sd_target_error = sd(mean_id_target_error, na.rm = T)) 
+dat %>%
+  dplyr::group_by(pilot, id, practice, condition) %>%
+  dplyr::summarize(mean_id = mean(target_error, na.rm = T)) %>%
+  dplyr::group_by(pilot, id, practice) %>%
+  dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
+  dplyr::group_by(practice) %>%
+  dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
+  print()
 
 
 
@@ -239,6 +258,10 @@ dat$touch_screen_error = ifelse(
   | (dat$id == 27 & (dat$ez_trial %in% c(12, 15, 16, 31, 41, 43, 50, 51, 52, 53, 55, 56)))
   | (dat$id == 28 & (dat$ez_trial %in% c(1, 3, 20, 24)))
   | (dat$id == 29 & (dat$ez_trial %in% c(21)))
+  | (dat$id == 30 & (dat$ez_trial %in% c(17, 20, 22:27, 30, 50)))
+  | (dat$id == 31 & (dat$ez_trial %in% c(19, 58)))
+  | (dat$id == 32 & (dat$ez_trial %in% c(12, 29, 39, 42, 44, 51, 53)))
+  | (dat$id == 33 & (dat$ez_trial %in% c()))
   , TRUE
   , FALSE
   )
@@ -301,6 +324,10 @@ dat$optotrak_error = ifelse(
   | (dat$id == 27 & (dat$ez_trial %in% c(1:10)))
   | (dat$id == 28 & (dat$ez_trial %in% c()))
   | (dat$id == 29 & (dat$ez_trial %in% c()))
+  | (dat$id == 30 & (dat$ez_trial %in% c()))
+  | (dat$id == 31 & (dat$ez_trial %in% c()))
+  | (dat$id == 32 & (dat$ez_trial %in% c(4)))
+  | (dat$id == 33 & (dat$ez_trial %in% c(33)))
   , TRUE
   , FALSE
 )
@@ -321,7 +348,7 @@ dat %>%
 dat_clean %>%
   dplyr::group_by(pilot, id, condition) %>%
   dplyr::summarize(count = length(trial)) %>%
-  print(n=60)
+  print(n=66)
   
 # NOTE: should again here look at touch screen related data, however
 # in theory nearlly all the removed trials would not have been included in the original analysis (NaNs)
@@ -410,26 +437,19 @@ proc.time() - ptm
 summary(df)
 
 # create function to plot points across trials and participants
-plot_points = function(ids_use, dv, ylimits, plot_lines = F) {
+plot_points = function(ids_use, dv, ylimits, outlier_cutoffs) {
   df$temp = dplyr::pull(df, dv)
   
   df %>%
     dplyr::filter(as.numeric(id) %in% ids_use) %>%
-    ggplot() -> gg
-  
-  if (plot_lines) {
-    gg = gg + geom_line(aes(x=frame, y=temp, group=trial, color=trial), alpha = 0.4, size = .2)
-  } else {
-    gg = gg + geom_point(aes(x=frame, y=temp, group=trial, color=trial), alpha = 0.2, size = .2)
-  }
-  
-  gg = gg +
+    ggplot()+
+    geom_point(aes(x=frame, y=temp, group=trial, color=trial), alpha = 0.2, size = .2)+
     xlab("frame")+
     ylab(sprintf("%s position (mm)", dv))+
     ylim(ylimits)+
-    facet_grid(condition~id)
-  
-  print(gg)
+    geom_hline(yintercept=outlier_cutoffs[1], size = 0.25, color = "red")+
+    geom_hline(yintercept=outlier_cutoffs[2], size = 0.25, color = "red")+
+    facet_grid(condition~id) %>% print()
 }
 
 
@@ -440,21 +460,26 @@ df %>%
   dplyr::group_by(pilot, id, ez_trial) %>%
   dplyr::summarize(dummy = mean(x)) %>%
   dplyr::summarize(num_trials = length(ez_trial)) %>%
-  print(n=30)
+  print(n=33)
 
 # X
-plot_points(1:10, "x", c(100, 400))
-plot_points(11:21, "x", c(100, 400))
-plot_points(21:30, "x", c(100, 400))
+xbounds = c(100, 400)
+xcutoffs = c(190, 325)
+plot_points(1:10, "x", xbounds, xcutoffs)
+plot_points(11:21, "x", xbounds, xcutoffs)
+plot_points(21:33, "x", xbounds, xcutoffs)
 # Y
-plot_points(1:10, "y", c(-200, 200))
-plot_points(11:21, "y", c(-200, 200))
-plot_points(21:30, "y", c(-200, 200))
-plot_points(c(3,9,19,26), "y", c(-200, 200))
+ybounds = c(-200, 200)
+ycutoffs =  c(-200, 200)
+plot_points(1:10, "y", ybounds, ycutoffs)
+plot_points(11:21, "y", ybounds, ycutoffs)
+plot_points(21:33, "y", ybounds, ycutoffs)
 # Z
-plot_points(1:10, "z", c(-3250, -3150))
-plot_points(11:21, "z", c(-3250, -3150))
-plot_points(21:30, "z", cc(-3250, -3150))
+zbounds = c(-3250, -3150)
+zcutoffs = c(-3250, -3175)
+plot_points(1:10, "z", zbounds, zcutoffs)
+plot_points(11:21, "z", zbounds, zcutoffs)
+plot_points(21:33, "z", zbounds, zcutoffs)
 
 
 # Secondary Marker ----
@@ -464,21 +489,24 @@ df %>%
   dplyr::group_by(pilot, id, ez_trial) %>%
   dplyr::summarize(dummy = mean(x2)) %>%
   dplyr::summarize(num_trials = length(ez_trial)) %>%
-  print(n=30)
+  print(n=33)
 
-# X
-plot_points(1:10, "x2", c(100, 400))
-plot_points(11:21, "x2", c(100, 400))
-plot_points(21:30, "x2", c(100, 400))
-# Y
-plot_points(1:10, "y2", c(-200, 200))
-plot_points(11:21, "y2", c(-200, 200))
-plot_points(21:30, "y2", c(-200, 200))
-plot_points(c(19,26), "y2", c(-200, 200))
-# Z
-plot_points(1:10, "z2", c(-3250, -3150))
-plot_points(11:21, "z2", c(-3250, -3150))
-plot_points(21:30, "z2", cc(-3250, -3150))
+# use same bounds as primary marker coordinates 
+# X2
+x2cutoffs = c(200, 340)
+plot_points(1:10, "x2", xbounds, x2cutoffs)
+plot_points(11:21, "x2", xbounds, x2cutoffs)
+plot_points(21:33, "x2", xbounds, x2cutoffs)
+# Y2
+y2cutoffs =  c(-200, 200)
+plot_points(1:10, "y2", ybounds, y2cutoffs)
+plot_points(11:21, "y2", ybounds, y2cutoffs)
+plot_points(21:33, "y2", ybounds, y2cutoffs)
+# Z2
+z2cutoffs = c(-3250, -3175)
+plot_points(1:10, "z2", zbounds, z2cutoffs)
+plot_points(11:21, "z2", zbounds, z2cutoffs)
+plot_points(21:33, "z2", zbounds, z2cutoffs)
 
 
 # Compare Markers ----
@@ -497,157 +525,220 @@ compare_lines = function(ids_use, dvs, ylimits) {
     facet_grid(condition~id) %>% print()
 }
 
+# in how many trials have both markers been lost?
+df %>%
+  dplyr::filter(abs(x2) > 1e25 | abs(y2) > 1e25 | abs(z2) > 1e25 | abs(x) > 1e25 | abs(y) > 1e25 | abs(z) > 1e25) %>%
+  dplyr::group_by(pilot, id, ez_trial) %>%
+  dplyr::summarize(dummy = mean(x2)) %>%
+  dplyr::summarize(num_trials = length(ez_trial)) %>%
+  print(n=33)
+
+# which participants have many trials for which both markers have problematic start points?
+bad_ids = c(3,5,9,14,19,21,24,25,26,28)
+# which participants have have problematic primary marker but reasonable second marker?
+replace_ids = c(1,8,22)
+
 # X
 compare_lines(1:10, c("x", "x2"), c(100, 400))
-compare_lines(11:21, c("x", "x2"), c(100, 400))
-compare_lines(21:30, c("x", "x2"), c(100, 400))
+compare_lines(11:20, c("x", "x2"), c(100, 400))
+compare_lines(21:33, c("x", "x2"), c(100, 400))
+compare_lines(bad_ids , c("x", "x2"), c(100, 400))
+compare_lines(replace_ids , c("x", "x2"), c(100, 400))
 # Y
 compare_lines(1:10, c("y", "y2"), c(-200, 200))
-compare_lines(11:21, c("y", "y2"), c(-200, 200))
-compare_lines(21:30, c("y", "y2"), c(-200, 200))
-compare_lines(c(3, 9, 19,26), c("y", "y2"), c(-200, 200))
+compare_lines(11:20, c("y", "y2"), c(-200, 200))
+compare_lines(21:33, c("y", "y2"), c(-200, 200))
+compare_lines(bad_ids, c("y", "y2"), c(-200, 200))
+compare_lines(replace_ids, c("y", "y2"), c(-200, 200))
 # Z
 compare_lines(1:10, c("z", "z2"), c(-3250, -3150))
-compare_lines(11:21, c("z", "z2"), c(-3250, -3150))
-compare_lines(21:30, c("z", "z2"), c(-3250, -3150))
+compare_lines(11:20, c("z", "z2"), c(-3250, -3150))
+compare_lines(21:33, c("z", "z2"), c(-3250, -3150))
+compare_lines(bad_ids, c("z", "z2"), c(-3250, -3150))
+compare_lines(replace_ids, c("z", "z2"), c(-3250, -3150))
+
+
+# Remove Lost/Outlying Marker Samples ---- 
+# first generate NAs for lost/outlying markers starting with primary marker
+boolean_vector = (df$x < xcutoffs[1] | df$x > xcutoffs[2]) | (df$y < ycutoffs[1] | df$y > ycutoffs[2]) | (df$z < zcutoffs[1] | df$z > zcutoffs[2])
+df$x_na = ifelse(boolean_vector, NA, df$x)
+df$y_na = ifelse(boolean_vector, NA, df$y)
+df$z_na = ifelse(boolean_vector, NA, df$z)
+# and for secondary marker
+boolean_vector2 = (df$x2 < x2cutoffs[1] | df$x2 > x2cutoffs[2]) | (df$y2 < y2cutoffs[1] | df$y2 > y2cutoffs[2]) | (df$z2 < z2cutoffs[1] | df$z2 > z2cutoffs[2])
+df$x2_na = ifelse(boolean_vector2, NA, df$x2)
+df$y2_na = ifelse(boolean_vector2, NA, df$y2)
+df$z2_na = ifelse(boolean_vector2, NA, df$z2)
 
 
 
-# Running Average Interpolation ---- 
-# needs to be odd for runmed()
-ma_inter_length = 11
-ma_inter_length_ms = ma_inter_length * 1000/200
+# Indentify Bad Trials ----
+# how many bad markers in a row will we tolerate
+max_lost = 7
+max_lost_ms = max_lost * 1000/200
 
-ptm = proc.time()
+# turn NAs (for any coordinate) into T
+df$isna = is.na(df$x_na) | is.na(df$y_na) | is.na(df$z_na)
+df$isna2 = is.na(df$x2_na) | is.na(df$y2_na) | is.na(df$z2_na)
+
+# get moving average of T/Fs
+df$isna_ma = as.numeric(ma(df$isna, max_lost))  
+df$isna_ma2 = as.numeric(ma(df$isna2, max_lost))  
+
+# determine when the moving average was 1 (all Ts)
+df$bad_chunk = df$isna_ma == 1
+df$bad_chunk = ifelse(is.na(df$bad_chunk), 0, df$bad_chunk)
+df$bad_chunk2 = df$isna_ma2 == 1
+df$bad_chunk2 = ifelse(is.na(df$bad_chunk2), 0, df$bad_chunk2)
+
+# identify the trials in which the 
 df %>%
   dplyr::group_by(pilot, id, condition, trial) %>%
   dplyr::mutate(
-    x_inter = as.numeric(runmed(x, ma_inter_length))
-    , y_inter = as.numeric(runmed(y, ma_inter_length))
-    , z_inter = as.numeric(runmed(z, ma_inter_length))
-    , x2_inter = as.numeric(runmed(x2, ma_inter_length))
-    , y2_inter = as.numeric(runmed(y2, ma_inter_length))
-    , z2_inter = as.numeric(runmed(z2, ma_inter_length))
-
+    bad_trial = max(bad_chunk)
+    , bad_trial2 = max(bad_chunk2)
   ) -> df
-proc.time() - ptm
-
-# interpolated positions
-# X
-compare_lines(1:10, c("x_inter", "x2_inter"), c(100, 400))
-compare_lines(11:21, c("x_inter", "x2_inter"), c(100, 400))
-compare_lines(21:30, c("x_inter", "x2_inter"), c(100, 400))
-# Y
-compare_lines(1:10, c("y_inter", "y2_inter"), c(-200, 200))
-compare_lines(11:21, c("y_inter", "y2_inter"), c(-200, 200))
-compare_lines(21:30, c("y_inter", "y2_inter"), c(-200, 200))
-# compare_lines(c(3, 9, 19,26), c("yinter", "y2_inter"), c(-200, 200))
-# Z
-compare_lines(1:10, c("z_inter", "z2_inter"), c(-3250, -3150))
-compare_lines(11:21, c("z_inter", "z2_inter"), c(-3250, -3150))
-compare_lines(21:30, c("z_inter", "z2_inter"), c(-3250, -3150))
 
 
-
-
-# Replace Values ----
-# replace extreme trials with interpolated value
-df$x = ifelse(abs(df$x) > 1e25, df$x_inter, df$x)
-df$y = ifelse(abs(df$y) > 1e25, df$y_inter, df$y)
-df$z = ifelse(abs(df$z) > 1e25, df$z_inter, df$z)
-# do the same for the secondary markers
-df$x2 = ifelse(abs(df$x2) > 1e25, df$x2_inter, df$x2)
-df$y2 = ifelse(abs(df$y2) > 1e25, df$y2_inter, df$y2)
-df$z2 = ifelse(abs(df$z2) > 1e25, df$z2_inter, df$z2)
-
-# identify trials that are bad
+# Replace and Remove Trials ----
+# how many trials of primary marker must be replaced?
 df %>%
   dplyr::group_by(pilot, id, condition, trial) %>%
-  dplyr::mutate(
-    x_drop = ifelse(max(abs(x)) > 1e25, TRUE, FALSE)
-    , y_drop = ifelse(max(abs(y)) > 1e25, TRUE, FALSE)
-    , z_drop = ifelse(max(abs(z)) > 1e25, TRUE, FALSE)
-    , x2_drop = ifelse(max(abs(x2)) > 1e25, TRUE, FALSE)
-    , y2_drop = ifelse(max(abs(y2)) > 1e25, TRUE, FALSE)
-    , z2_drop = ifelse(max(abs(z2)) > 1e25, TRUE, FALSE)
-  ) -> df
+  dplyr::summarize(bad = unique(bad_trial)) %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarise(bad = sum(bad)) %>% print(n=66)
 
-# how many bad trials for the primary marker?
-df %>%
-  dplyr::filter(x_drop | y_drop | z_drop) %>%
-  dplyr::group_by(pilot, id, ez_trial) %>%
-  dplyr::summarize(dummy = mean(x)) %>%
-  dplyr::summarize(num_trials = length(ez_trial)) %>%
-  print(n=30)
-# how many bad trials for the secondary marker?
-df %>%
-  dplyr::filter(x2_drop | y2_drop | z2_drop) %>%
-  dplyr::group_by(pilot, id, ez_trial) %>%
-  dplyr::summarize(dummy = mean(x)) %>%
-  dplyr::summarize(num_trials = length(ez_trial)) %>%
-  print(n=30)
-# how many trials will be dropped?
-df %>%
-  dplyr::filter(x_drop | y_drop | z_drop, x2_drop | y2_drop | z2_drop) %>%
-  dplyr::group_by(pilot, id, ez_trial) %>%
-  dplyr::summarize(dummy = mean(x)) %>%
-  dplyr::summarize(num_trials = length(ez_trial)) %>%
-  print(n=30)
-
-# replace bad trial with secondary marker
+# how many trials of secondary marker are bad?
 df %>%
   dplyr::group_by(pilot, id, condition, trial) %>%
-  dplyr::mutate(
-    x = ifelse(x_drop, ifelse(x2_drop, NA, x2), x)
-    , y = ifelse(y_drop, ifelse(y2_drop, NA, y2), y)
-    , z = ifelse(z_drop, ifelse(z2_drop, NA, z2), z)
-  ) -> df
+  dplyr::summarize(bad = unique(bad_trial2)) %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarise(bad = sum(bad)) %>% print(n=66)
 
-# get rid of bad trials
+# how many trials are bad for both? 
 df %>%
-  dplyr::filter(!is.na(x), !is.na(y), !is.na(z)) -> df
-  
-# how many trials are left in each condition?
-df %>%
+  dplyr::group_by(pilot, id, condition, trial) %>%
+  dplyr::summarize(bad = unique(bad_trial2 & bad_trial)) %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarise(bad = sum(bad)) %>% print(n=66)
+
+# we get rid of trials that are bad with respect to both markers
+df %>% 
+  dplyr::filter(!bad_trial, !bad_trial2) -> df_clean
+
+# now we replace primary marker with secondary marker for bad trials
+df_clean$x_clean = ifelse(df_clean$bad_trial, df_clean$x2_na, df_clean$x_na)
+df_clean$y_clean = ifelse(df_clean$bad_trial, df_clean$y2_na, df_clean$y_na)
+df_clean$z_clean = ifelse(df_clean$bad_trial, df_clean$z2_na, df_clean$z_na)
+
+# finally we replace all trials from certain participants with other marker
+# if value does not correspond to one of the pre-selected participant, then the value from the previous procedure is kept
+df_clean$x_clean = ifelse(df_clean$id %in% replace_ids, df_clean$x2_na, df_clean$x_clean)
+df_clean$y_clean = ifelse(df_clean$id %in% replace_ids, df_clean$y2_na, df_clean$y_clean)
+df_clean$z_clean = ifelse(df_clean$id %in% replace_ids, df_clean$z2_na, df_clean$z_clean)
+
+
+
+# Remove Participants ----
+# how many trials are there in each condition?
+df_clean %>%
   dplyr::group_by(pilot, id, condition) %>%
   dplyr::summarize(count = length(unique(trial))) %>%
-  print(n=60) -> trial_count
+  print(n=66) -> trial_count
 
-# get rid of participants with fewer than 10 trials for any given condition
-trial_count %>% dplyr::filter(count > 10) -> id_keep
+# identify participants with fewer than 10 trials for any given condition
+trial_count %>% dplyr::filter(count >= 10) -> id_keep
 id_keep %>% dplyr::filter(condition == "vision") %>% dplyr::pull("id") -> id_keep_v
 id_keep %>% dplyr::filter(condition == "no_vision") %>% dplyr::pull("id") -> id_keep_nv
-keep = dplyr::intersect(id_keep_v, id_keep_nv)
+keep = dplyr::intersect(id_keep_v, id_keep_nv) %>% print()
 
-df %>% dplyr::filter(id %in% keep) -> df
+# only keep participants with sufficient trials
+df_clean %>% dplyr::filter(id %in% keep) -> df_cleaner
+
+# # get rid of bad ids
+# df_cleaner %>% dplyr::filter(!(id %in% bad_ids)) -> df_cleanest
+df_cleaner -> df_cleanest
+rm(df_cleaner)
 
 # how many trials are left?
-df %>%
+df_cleanest %>%
   dplyr::group_by(pilot, id, condition) %>%
   dplyr::summarize(count = length(unique(trial))) %>%
-  print(n=60) 
+  print(n=66) 
 # how many participants are left?
-n=length(unique(df$id))
+n2=length(unique(df_cleanest$id))
+n2
 
 
+
+# Interpolate ----
+inter_ma_len = 21
+inter_ma_len_ms = inter_ma_len * 1000/200
+
+# interpolate each trial
+ptm = proc.time()
+df_cleanest %>%
+  dplyr::group_by(pilot, id, condition, trial) %>%
+  dplyr::mutate(
+    # x_inter = na.approx(x_clean, na.rm=F)
+    # , y_inter = na.approx(y_clean, na.rm=F)
+    # , z_inter = na.approx(z_clean, na.rm=F)
+    x_inter = na.locf(x_clean)
+    , y_inter = na.locf(y_clean)
+    , z_inter = na.locf(z_clean)
+    ) -> df_cleanest
+proc.time() - ptm
+
+# how many trials still have NAs?
+df_cleanest %>%
+  dplyr::filter(is.na(x_inter) | is.na(x_inter) | is.na(x_inter)) %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarize(count = length(unique(trial))) %>% print(n=n*2)
+
+# create function to plot new data frame
+plot_lines = function(ids_use, dv, ylimits, y_label) {
+  df_cleanest$temp = dplyr::pull(df_cleanest, dv)
+  
+  df_cleanest %>%
+    dplyr::filter(as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=frame, y=temp, group=trial, color=trial), alpha = 0.4, size = .2)+
+    xlab("frame")+
+    ylab(y_label)+
+    ylim(ylimits)+
+    facet_grid(condition~id) %>% print()
+}
+
+# identify bad Ps. These tend to have ill-defined start points
+still_bad_ids = c(3, 9, 19, 26)
+
+# visualize interpolated data 
 # X
-plot_points(1:10, "x", c(100, 400), T)
-plot_points(11:21, "x", c(100, 400), T)
-plot_points(21:30, "x", c(100, 400), T)
+plot_lines(1:10, "x_inter", xbounds, "x position (mm)")
+plot_lines(11:21, "x_inter", xbounds, "x position (mm)")
+plot_lines(21:33, "x_inter", xbounds, "x position (mm)")
+plot_lines(still_bad_ids, "x_inter", xbounds, "bad x position (mm)")
 # Y
-plot_points(1:10, "y", c(-200, 200), T)
-plot_points(11:21, "y", c(-200, 200), T)
-plot_points(21:30, "y", c(-200, 200), T)
+plot_lines(1:10, "y_inter", ybounds, "y position (mm)")
+plot_lines(11:21, "y_inter", ybounds, "y position (mm)")
+plot_lines(21:33, "y_inter", ybounds, "y position (mm)")
+plot_lines(still_bad_ids, "y_inter", ybounds, "bad y position (mm)")
 # Z
-plot_points(1:10, "z", c(-3250, -3150), T)
-plot_points(11:21, "z", c(-3250, -3150), T)
-plot_points(21:30, "z", c(-3250, -3150), T)
+plot_lines(1:10, "z_inter", zbounds, "z position (mm)")
+plot_lines(11:21, "z_inter", zbounds, "z position (mm)")
+plot_lines(21:33, "z_inter", zbounds, "z position (mm)")
+plot_lines(still_bad_ids, "z_inter", zbounds, "bad z position (mm)")
 
-
-
-# Outliers ----
-# DO THIS?
-
+# remove 'still' bad participants
+df_cleanest %>% dplyr::filter(!(id %in% still_bad_ids)) -> df_for_long
+# how many trials are left?
+df_for_long %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarize(count = length(unique(trial))) %>%
+  print(n=66) 
+# how many participants are left?
+n=length(unique(df_for_long$id))
+n
 
 
 
@@ -659,43 +750,45 @@ plot_points(21:30, "z", c(-3250, -3150), T)
 # Long Format ----
 # create time variable (ms) from frame variable
 sampling_freq = 200
-df$time = df$frame/sampling_freq*1000
+df_for_long$time = df_for_long$frame/sampling_freq*1000
 
-df %>%
+df_for_long %>%
   dplyr::select(-x2, -y2, -z2) %>%
-  gather(coordinate, position, x:z, factor_key = T) -> df_long
-# rm(df)
+  gather(coordinate, position, x_inter:z_inter, factor_key = T) -> df_long
+# rm(df_for_long)
+
+centering_window = 100
+centering_window_ms = centering_window * 1000/200
 
 # make trial start ~zero by subtracting median of frist few samples
 df_long %>%
   dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
-  dplyr::mutate(position = position - median(position[1:100])) -> df_long
+  dplyr::mutate(centered_position = position - median(position[1:centering_window])) -> df_long
 
 # create function to plot points across trials and participants
-plot_long = function(ids_use, dv, edge_line = 0) {
+plot_long = function(ids_use, dv, y_label) {
   
   df_long %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=time, y=position, group=trial, color=trial), alpha = 0.5, size = .2)+
-    xlab("time (ms)")+
-    ylab(sprintf("%s position (mm)", dv))+
-    geom_vline(xintercept = edge_line, color = "red")+
+    geom_line(aes(x=time/1000, y=centered_position, group=trial, color=trial), alpha = 0.5, size = .2)+
+    xlab("time (s)")+
+    ylab(y_label)+
     facet_grid(condition~id) %>% print()
 }
 
 # X
-plot_long(1:10, "x")
-plot_long(11:20, "x")
-plot_long(21:30, "x")
+plot_long(1:10, "x_inter", "x position (mm)")
+plot_long(11:20, "x_inter", "x position (mm)")
+plot_long(21:33, "x_inter", "x position (mm)")
 # Y
-plot_long(1:10, "y")
-plot_long(11:20, "y")
-plot_long(21:30, "y")
+plot_long(1:10, "y_inter", "y position (mm)")
+plot_long(11:20, "y_inter", "y position (mm)")
+plot_long(21:33, "y_inter", "y position (mm)")
 # Z
-plot_long(1:10, "z")
-plot_long(11:20, "z")
-plot_long(21:30, "z")
+plot_long(1:10, "z_inter", "z position (mm)")
+plot_long(11:20, "z_inter", "z position (mm)")
+plot_long(21:33, "z_inter", "z position (mm)")
 
 
 
@@ -710,32 +803,35 @@ nyquist_freq = sampling_freq/2
 bf = butter(filter_order, hi_cutoff/nyquist_freq, type = "low")
 
 # make copy for renaming purpose (lazy)
-df_long$unfil_position = df_long$position
-
+df_long$unfil_position = df_long$centered_position
+# filter data
 df_long %>%
   dplyr::group_by(pilot, id, block, coordinate, trial) %>%
-  dplyr::mutate(position = signal::filtfilt(bf, unfil_position)) -> df_long
-
-# look at result
-edge_line = 50
+  dplyr::mutate(centered_position = signal::filtfilt(bf, unfil_position)) -> df_long
 
 # X
-plot_long(1:10, "x", edge_line)
-plot_long(11:20, "x", edge_line)
-plot_long(21:30, "x", edge_line)
+plot_long(1:10, "x_inter", "x position (mm)")
+plot_long(11:20, "x_inter", "x position (mm)")
+plot_long(21:33, "x_inter", "x position (mm)")
+plot_long(bad_ids, "x_inter", "bad x position (mm)")
 # Y
-plot_long(1:10, "y", edge_line)
-plot_long(11:20, "y", edge_line)
-plot_long(21:30, "y", edge_line)
+plot_long(1:10, "y_inter", "y position (mm)")
+plot_long(11:20, "y_inter", "y position (mm)")
+plot_long(21:33, "y_inter", "y position (mm)")
+# examine some participants that remain problematic
+plot_long(bad_ids, "y_inter", "bad y position (mm)")
 # Z
-# THE Z DATA ARE CRAP!
-plot_long(1:10, "z", edge_line)
-plot_long(11:20, "z", edge_line)
-plot_long(21:30, "z", edge_line)
+plot_long(1:10, "z_inter", "z position (mm)")
+plot_long(11:20, "z_inter", "z position (mm)")
+plot_long(21:33, "z_inter", "z position (mm)")
 
+
+# take off early edge effect
+edge_start = 50
+edge_end = 4500
 
 # get rid of edge effect at beginning
-df_long %>% dplyr::filter(time > edge_line) -> df_long
+df_long %>% dplyr::filter(time > edge_start, time < edge_end) -> df_long_noedge
 
 
 
@@ -743,39 +839,39 @@ df_long %>% dplyr::filter(time > edge_line) -> df_long
 # how far should the fixation* and target be apart?
 (ytargetcoor - yfixcoor)
 # what are the cutoffs for trial start and end?
-start_line = 50
-end_line = 270
+# start_line / 10 cm 
+start_line = 10
 
-plot_bounds = function(ids_use, dv, start_line, end_line) {
+plot_bounds = function(ids_use, dv, y_label, start_line) {
   
-  df_long %>%
+  df_long_noedge %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=time, y=position, group=trial, color=trial), alpha = 0.5, size = .2)+
-    xlab("time (ms)")+
-    ylab(sprintf("%s position (mm)", dv))+
+    geom_line(aes(x=time/1000, y=centered_position, group=trial, color=trial), alpha = 0.5, size = .2)+
+    xlab("time (s)")+
+    ylab(y_label)+
     geom_hline(yintercept = start_line, color = "red")+
-    geom_hline(yintercept = end_line, color = "red")+
     facet_grid(condition~id) %>% print()
 }
 
 # Y
-plot_bounds(1:10, "y", start_line, end_line)
-plot_bounds(11:20, "y", start_line, end_line)
-plot_bounds(21:30, "y", start_line, end_line)
-
+plot_bounds(1:10, "y_inter", "y position (mm)", start_line)
+plot_bounds(11:20, "y_inter", "y position (mm)", start_line)
+plot_bounds(21:33, "y_inter", "y position (mm)", start_line)
+plot_bounds(30, "y_inter", "bad y position (mm)", start_line)
 
 
 # Derivatives ----
-# position/(frame * seconds/frame)
-df_long$velocity = c(0, diff(df_long$position))/(1/sampling_freq)
-df_long$acceleration = c(0, diff(df_long$velocity))/(1/sampling_freq)
+# position/(frame * seconds/frame) = position/second
+df_long_noedge$velocity = c(0, diff(df_long_noedge$centered_position))/(1/sampling_freq)
+# (position/second)/(frame * seconds/frame) = position/second^2
+df_long_noedge$acceleration = c(0, diff(df_long_noedge$velocity))/(1/sampling_freq)
 
-df_long %>% dplyr::filter(time != edge_line + 1000/sampling_freq) -> df_long_clean  # getting rid of first frame
-# rm(df_long)
+df_long_noedge %>% dplyr::filter(time != edge_line + 1000/sampling_freq) -> df_long_clean  # getting rid of first frame
+# rm(df_long_noedge)
 
 # create function to plot velocity and acceleration
-plot_devs = function(ids_use, dv, dev = "velocity") {
+plot_devs = function(ids_use, dv, y_label, ylimits, dev = "velocity") {
   df_long_clean$temp = dplyr::pull(df_long_clean, dev)
   
   df_long_clean %>%
@@ -783,38 +879,45 @@ plot_devs = function(ids_use, dv, dev = "velocity") {
     ggplot()+
     geom_line(aes(x=time, y=temp, group=trial, color=trial), alpha = 0.5, size = .2)+
     xlab("time (ms)")+
-    ylab(sprintf("%s %s", dv, dev))+
-    facet_grid(condition~id) %>% print()
+    ylab(sprintf("%s %s", y_label, dev))+
+    ylim(ylimits)+
+    facet_grid(id~condition) %>% print()
 }
 
-# DEVS ARE TOO NOISY
-# # Velocity
-# # X
-# plot_devs(1:10, "x")
-# plot_devs(11:20, "x")
-# plot_devs(21:30, "x")
-# # Y
-# plot_devs(1:10, "y")
-# plot_devs(11:20, "y")
-# plot_devs(21:30, "y")
-# # Z
-# plot_devs(1:10, "z")
-# plot_devs(11:20, "z")
-# plot_devs(21:30, "z")
-# 
-# # Acceleration
-# # X
-# plot_devs(1:10, "x", "acceleration")
-# plot_devs(11:20, "x", "acceleration")
-# plot_devs(21:30, "x", "acceleration")
-# # Y
-# plot_devs(1:10, "y", "acceleration")
-# plot_devs(11:20, "y", "acceleration")
-# plot_devs(21:30, "y", "acceleration")
-# # Z
-# plot_devs(1:10, "z", "acceleration")
-# plot_devs(11:20, "z", "acceleration")
-# plot_devs(21:30, "z", "acceleration")
+
+# Velocity
+# X
+xbounds_velo = c(-1000, 1000)
+plot_devs(1:10, "x_inter", "x", xbounds_velo)
+plot_devs(11:20, "x_inter", "x", xbounds_velo)
+plot_devs(21:33, "x_inter", "x", xbounds_velo)
+# Y
+ybounds_velo = c(-3000, 3000)
+plot_devs(1:10, "y_inter", "y", ybounds_velo)
+plot_devs(11:20, "y_inter", "y", ybounds_velo)
+plot_devs(21:33, "y_inter", "y", ybounds_velo)
+# Z
+zbounds_velo = c(-500, 500)
+plot_devs(1:10, "z_inter", "z", zbounds_velo)
+plot_devs(11:20, "z_inter", "z", zbounds_velo)
+plot_devs(21:33, "z_inter", "z", zbounds_velo)
+
+# Acceleration
+# X
+xbounds_accel = c(-20000, 20000)
+plot_devs(1:10, "x_inter", "x", xbounds_accel, "acceleration")
+plot_devs(11:20, "x_inter", "x", xbounds_accel, "acceleration")
+plot_devs(21:33, "x_inter", "x", xbounds_accel, "acceleration")
+# Y
+ybounds_accel = c(-30000, 30000)
+plot_devs(1:10, "y_inter", "y", ybounds_accel, "acceleration")
+plot_devs(11:20, "y_inter", "y", ybounds_accel, "acceleration")
+plot_devs(21:33, "y_inter", "y", ybounds_accel, "acceleration")
+# Z
+ybounds_accel = c(-10000, 10000)
+plot_devs(1:10, "z_inter", "z", ybounds_accel, "acceleration")
+plot_devs(11:20, "z_inter", "z", ybounds_accel, "acceleration")
+plot_devs(21:33, "z_inter", "z", ybounds_accel, "acceleration")
 
 
 
@@ -824,14 +927,40 @@ df_long_clean %>% dplyr::arrange(pilot, id, condition, trial, coordinate, time) 
 
 # determine when thresholds are exceeded in primary movement axis
 df_long_clean %>%
-  dplyr::select(pilot, id, condition, trial, coordinate, time, position) %>%
-  spread(coordinate, position) %>%
+  dplyr::select(pilot, id, condition, trial, coordinate, time, centered_position) %>%
+  spread(coordinate, centered_position) %>%
   dplyr::mutate(
-    non_stationary = y > start_line
-    , stationary = y > end_line
+    moved = y_inter > start_line
   ) %>%
-  gather(coordinate, velocity, x:z, factor_key = T) %>%
-  dplyr::arrange(pilot, id, condition, trial, coordinate, time) -> df_long_velo  # the arrange function is necessary for lining up both data frames
+  gather(coordinate, centered_position, x_inter:z_inter, factor_key = T) %>%
+  dplyr::arrange(pilot, id, condition, trial, coordinate, time) -> df_long_moved  # the arrange function is necessary for lining up both data frames
+
+# make sure they are lined up
+mean(df_long_moved$centered_position == df_long_clean$centered_position)
+mean(df_long_moved$id == df_long_clean$id)
+mean(df_long_moved$trial == df_long_clean$trial)
+mean(df_long_moved$time == df_long_clean$time)
+
+# add to data frame
+df_long_moved %>%
+  ungroup() %>%
+  dplyr::select(moved) %>%
+  bind_cols(df_long_clean) -> df_long_clean
+# get rid of velocity sub-df
+rm(df_long_moved)
+
+# determine when thresholds are exceeded in primary movement axis
+velo_start = 10
+velo_end = 100
+df_long_clean %>%
+  dplyr::select(pilot, id, condition, trial, coordinate, time, velocity) %>%
+  spread(coordinate, velocity) %>%
+  dplyr::mutate(
+    non_stationary = y_inter > velo_start
+    , stationary = y_inter < velo_end
+  ) %>%
+  gather(coordinate, velocity, x_inter:z_inter, factor_key = T) %>%
+  dplyr::arrange(pilot, id, condition, trial, coordinate, time) -> df_long_velo # the arrange function is necessary for lining up both data frames
 
 # make sure they are lined up
 mean(df_long_velo$velocity == df_long_clean$velocity)
@@ -842,19 +971,18 @@ mean(df_long_velo$time == df_long_clean$time)
 df_long_velo %>%
   ungroup() %>%
   dplyr::select(non_stationary, stationary) %>%
-  bind_cols(df_long_clean) %>%
-  dplyr::select(pilot:velocity, non_stationary:stationary) -> df_long_clean
+  bind_cols(df_long_clean) -> df_long_clean
 # get rid of velocity sub-df
 rm(df_long_velo)
 
 
 
 # 200 Hz = 200 samples/second ... 'ma_length_ms'/1000 seconds * 200 samples/second = 'ma_length' samples
-ma_length = 4
+ma_length = 5
 ma_length_ms = ma_length * 1000/200
 # we ignore seperations among ids, coordinates, and trials for efficiency
 # the following processing should make it so that this does not effect trial starts and ends
-df_long_clean$potential_start = as.numeric(ma(df_long_clean$non_stationary, ma_length))  
+df_long_clean$potential_start = as.numeric(ma(df_long_clean$non_stationary & df_long_clean$moved, ma_length))  
 df_long_clean$potential_end = as.numeric(ma(df_long_clean$stationary, ma_length)) 
 
 # I actually think this is faster than just using mutate
@@ -864,29 +992,23 @@ df_long_clean$trial_end_bool = df_long_clean$potential_end == 1
 df_long_clean$trial_start_frame = df_long_clean$trial_start_bool * df_long_clean$frame 
 df_long_clean$trial_end_frame = df_long_clean$trial_end_bool * df_long_clean$frame 
 
-# identify first positive change in 'potential emd'
+# identify first positive change in 'potential end'
 df_long_clean$trial_end_diff = diff(c(0,df_long_clean$trial_end_bool))
 df_long_clean$trial_end_bool_2 = df_long_clean$trial_end_diff == 1
 df_long_clean$trial_end_frame = df_long_clean$trial_end_bool_2 * df_long_clean$frame - 1
 
-# # select some columns to make things faster
-# df_long_clean %>%
-#   dplyr::select(
-#     -c(block, velocity, non_stationary, potential_start, trial_start_bool, trial_end_diff, trial_end_bool)
-#   ) -> df_long_clean
-
 # give some space 
-buffer_start = 20
+buffer_start = 0
 buffer_start_ms = buffer_start * 1000/200
 
-buffer_end = 20
+buffer_end = 0
 buffer_end_ms = buffer_end * 1000/200
 
 df_long_clean %>%
   group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::mutate(
-    trial_start = sort(unique(trial_start_frame))[2] - ma_length/2 - buffer_start   # we pick the second lowest because there are many zeroes
-    , trial_end = sort(unique(trial_end_frame))[2] + buffer_end  # we pick the second lowest because there are many -1s
+    trial_start = sort(unique(trial_start_frame))[2] - (ma_length-1)/2 - buffer_start   # we pick the second lowest because there are many zeroes
+    , trial_end = sort(unique(trial_end_frame))[2] + (ma_length-1)/2  + buffer_end  # we pick the second lowest because there are many -1s
   ) -> df_long_clean
 
 df_long_clean %>%
@@ -909,29 +1031,33 @@ df_long_trim %>%
 ##########################################################
 
 # create function to plot trimmed data 
-plot_trim = function(ids_use, dv) {
+plot_trim = function(ids_use, dv, y_label) {
   
   df_long_trim %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=zero_time, y=position, group=trial, color=trial), alpha = 0.5, size = .2)+
+    geom_line(aes(x=zero_time, y=centered_position, group=trial, color=trial), alpha = 0.5, size = .2)+
     xlab("time (ms)")+
-    ylab(sprintf("%s position (mm)", dv))+
-    facet_grid(condition~id) %>% print()
+    ylab(y_label)+
+    facet_grid(id~condition) %>% print()
 }
 
+
+####  NOTE: NORMALIZTION SORT OF TAKES CARE OF OUTLYING TRIALS ####
+
+
 # X
-plot_trim(1:10, "x")
-plot_trim(11:20, "x")
-plot_trim(21:30, "x")
+plot_trim(1:10, "x_inter", "x position (mm)")
+plot_trim(11:20, "x_inter", "x position (mm)")
+plot_trim(21:33, "x_inter", "x position (mm)")
 # Y
-plot_trim(1:10, "y")
-plot_trim(11:20, "y")
-plot_trim(21:30, "y")
+plot_trim(1:10, "y_inter", "y position (mm)")
+plot_trim(11:20, "y_inter", "y position (mm)")
+plot_trim(21:33, "y_inter", "y position (mm)")
 # Z
-plot_trim(1:10, "z")
-plot_trim(11:20, "z")
-plot_trim(21:30, "z")
+plot_trim(1:10, "z_inter", "z position (mm)")
+plot_trim(11:20, "z_inter", "z position (mm)")
+plot_trim(21:33, "z_inter", "z position (mm)")
 
 
 
@@ -939,7 +1065,7 @@ plot_trim(21:30, "z")
 df_long_trim %>%
   group_by(pilot, id, condition, coordinate, zero_time) %>%
   dplyr::summarise(
-    position_avg = median(position) # MEDIAN
+    position_avg = median(centered_position) # MEDIAN
   ) -> df_long_trim_avg
 
 plot_trim_avg = function(ids_use, dv) {
@@ -950,21 +1076,21 @@ plot_trim_avg = function(ids_use, dv) {
     geom_line(aes(x=zero_time, y=position_avg, group=id, color=id), alpha = 0.5, size = .5)+
     xlab("time (ms)")+
     ylab(sprintf("%s average position (mm)", dv))+
-    facet_grid(.~condition) %>% print()
+    facet_grid(condition~.) %>% print()
 }
 
 # X
-plot_trim_avg(1:10, "x")
-plot_trim_avg(11:20, "x")
-plot_trim_avg(21:30, "x")
+plot_trim_avg(1:10, "x_inter")
+plot_trim_avg(11:20, "x_inter")
+plot_trim_avg(21:33, "x_inter")
 # Y
-plot_trim_avg(1:10, "y")
-plot_trim_avg(11:20, "y")
-plot_trim_avg(21:30, "y")
+plot_trim_avg(1:10, "y_inter")
+plot_trim_avg(11:20, "y_inter")
+plot_trim_avg(21:33, "y_inter")
 # Z
-plot_trim_avg(1:10, "z")
-plot_trim_avg(11:20, "z")
-plot_trim_avg(21:30, "z")
+plot_trim_avg(1:10, "z_inter")
+plot_trim_avg(11:20, "z_inter")
+plot_trim_avg(21:33, "z_inter")
 
 
 
@@ -987,11 +1113,11 @@ plot_trim_grand_avg = function(dv) {
 }
 
 # X
-plot_trim_grand_avg("x")
+plot_trim_grand_avg("x_inter")
 # Y
-plot_trim_grand_avg("y")
+plot_trim_grand_avg("y_inter")
 # Z
-plot_trim_grand_avg("z")
+plot_trim_grand_avg("z_inter")
 
 
 
@@ -1016,7 +1142,7 @@ df_long_trim %>%
 df_long_norm2 %>%
   dplyr::group_by(pilot, id, condition, trial, coordinate, norm_time) %>%
   dplyr::mutate(
-    norm_position = median(position) # MEDIAN
+    norm_position = median(centered_position) # MEDIAN
   ) -> df_long_norm
 
 # create function to plot norm data 
@@ -1028,21 +1154,21 @@ plot_norm = function(ids_use, dv) {
     geom_line(aes(x=norm_time, y=norm_position, group=trial, color=trial), alpha = 0.5, size = .2)+
     xlab("normalized time")+
     ylab(sprintf("%s position (mm)", dv))+
-    facet_grid(condition~id) %>% print()
+    facet_grid(id~condition) %>% print()
 }
 
 # X
-plot_norm(1:10, "x")
-plot_norm(11:20, "x")
-plot_norm(21:30, "x")
+plot_norm(1:10, "x_inter")
+plot_norm(11:20, "x_inter")
+plot_norm(21:33, "x_inter")
 # Y
-plot_norm(1:10, "y")
-plot_norm(11:20, "y")
-plot_norm(21:30, "y")
+plot_norm(1:10, "y_inter")
+plot_norm(11:20, "y_inter")
+plot_norm(21:33, "y_inter")
 # Z
-plot_norm(1:10, "z")
-plot_norm(11:20, "z")
-plot_norm(21:30, "z")
+plot_norm(1:10, "z_inter")
+plot_norm(11:20, "z_inter")
+plot_norm(21:33, "z_inter")
 
 
 
@@ -1065,17 +1191,17 @@ plot_norm_avg = function(ids_use, dv) {
 }
 
 # X
-plot_norm_avg(1:10, "x")
-plot_norm_avg(11:20, "x")
-plot_norm_avg(21:30, "x")
+plot_norm_avg(1:10, "x_inter")
+plot_norm_avg(11:20, "x_inter")
+plot_norm_avg(21:33, "x_inter")
 # Y
-plot_norm_avg(1:10, "y")
-plot_norm_avg(11:20, "y")
-plot_norm_avg(21:30, "y")
+plot_norm_avg(1:10, "y_inter")
+plot_norm_avg(11:20, "y_inter")
+plot_norm_avg(21:33, "y_inter")
 # Z
-plot_norm_avg(1:10, "z")
-plot_norm_avg(11:20, "z")
-plot_norm_avg(21:30, "z")
+plot_norm_avg(1:10, "z_inter")
+plot_norm_avg(11:20, "z_inter")
+plot_norm_avg(21:33, "z_inter")
 
 
 # now we average over participants
@@ -1096,11 +1222,11 @@ plot_norm_grand_avg = function(dv) {
 }
 
 # X
-plot_norm_grand_avg("x")
+plot_norm_grand_avg("x_inter")
 # Y
-plot_norm_grand_avg("y")
+plot_norm_grand_avg("y_inter")
 # Z
-plot_norm_grand_avg("z")
+plot_norm_grand_avg("z_inter")
 
 
 
@@ -1126,17 +1252,17 @@ plot_spat_var = function(ids_use, dv) {
 }
 
 # X
-plot_spat_var(1:10, "x")
-plot_spat_var(11:20, "x")
-plot_spat_var(21:30, "x")
+plot_spat_var(1:10, "x_inter")
+plot_spat_var(11:20, "x_inter")
+plot_spat_var(21:33, "x_inter")
 # Y
-plot_spat_var(1:10, "y")
-plot_spat_var(11:20, "y")
-plot_spat_var(21:30, "y")
+plot_spat_var(1:10, "y_inter")
+plot_spat_var(11:20, "y_inter")
+plot_spat_var(21:33, "y_inter")
 # Z
-plot_spat_var(1:10, "z")
-plot_spat_var(11:20, "z")
-plot_spat_var(21:30, "z")
+plot_spat_var(1:10, "z_inter")
+plot_spat_var(11:20, "z_inter")
+plot_spat_var(21:33, "z_inter")
 
 
 # Average of Spatial Variabilty Profiles ----
@@ -1156,8 +1282,8 @@ plot_spat_var_avg = function(dv) {
 }
 
 # X
-plot_spat_var_avg("x")
+plot_spat_var_avg("x_inter")
 # Y
-plot_spat_var_avg("y")
+plot_spat_var_avg("y_inter")
 # Z
-plot_spat_var_avg("z")
+plot_spat_var_avg("z_inter")
