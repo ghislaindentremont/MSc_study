@@ -1143,32 +1143,35 @@ df_long_norm2 %>%
   dplyr::group_by(pilot, id, condition, trial, coordinate, norm_time) %>%
   dplyr::mutate(
     norm_position = median(centered_position) # MEDIAN
+    , norm_velocity = median(velocity)
+    , norm_acceleration = median(acceleration)
   ) -> df_long_norm
 
-# create function to plot norm data 
-plot_norm = function(ids_use, dv) {
-  
+
+# Normalized Trials ----
+plot_norm = function(ids_use, dv, dev, y_label) {
+  df_long_norm$tempy = dplyr::pull(df_long_norm, dev)
   df_long_norm %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=norm_time, y=norm_position, group=trial, color=trial), alpha = 0.5, size = .2)+
+    geom_line(aes(x=norm_time, y=tempy, group=trial, color=trial), alpha = 0.5, size = .2)+
     xlab("normalized time")+
-    ylab(sprintf("%s position (mm)", dv))+
+    ylab(y_label)+
     facet_grid(id~condition) %>% print()
 }
 
 # X
-plot_norm(1:10, "x_inter")
-plot_norm(11:20, "x_inter")
-plot_norm(21:33, "x_inter")
+plot_norm(1:10, "x_inter", "norm_position", "x position (mm)")
+plot_norm(11:20, "x_inter", "norm_position", "x position (mm)")
+plot_norm(21:33, "x_inter", "norm_position", "x position (mm)")
 # Y
-plot_norm(1:10, "y_inter")
-plot_norm(11:20, "y_inter")
-plot_norm(21:33, "y_inter")
+plot_norm(1:10, "y_inter", "norm_position", "y position (mm)")
+plot_norm(11:20, "y_inter", "norm_position", "y position (mm)")
+plot_norm(21:33, "y_inter", "norm_position", "y position (mm)")
 # Z
-plot_norm(1:10, "z_inter")
-plot_norm(11:20, "z_inter")
-plot_norm(21:33, "z_inter")
+plot_norm(1:10, "z_inter", "norm_position", "z position (mm)")
+plot_norm(11:20, "z_inter", "norm_position", "z position (mm)")
+plot_norm(21:33, "z_inter", "norm_position", "z position (mm)")
 
 
 
@@ -1177,56 +1180,153 @@ df_long_norm %>%
   group_by(pilot, id, condition, coordinate, norm_time) %>%
   dplyr::summarise(
     position_avg = median(norm_position) # MEDIAN
+    , velocity_avg = median(norm_velocity)
+    , acceleration_avg = median(norm_acceleration)
   ) -> df_long_norm_avg
 
-plot_norm_avg = function(ids_use, dv) {
-  
+plot_norm_avg = function(ids_use, dv, dev, y_label) {
+  df_long_norm_avg$tempy = dplyr::pull(df_long_norm_avg, dev)
   df_long_norm_avg %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=norm_time, y=position_avg, group=id, color=id), size = .3)+
+    geom_line(aes(x=norm_time, y=tempy, group=id, color=id), size = .3)+
     xlab("normalized time")+
-    ylab(sprintf("%s average position (mm)", dv))+
+    ylab(y_label)+
     facet_grid(.~condition) %>% print()
 }
 
 # X
-plot_norm_avg(1:10, "x_inter")
-plot_norm_avg(11:20, "x_inter")
-plot_norm_avg(21:33, "x_inter")
+plot_norm_avg(1:10, "x_inter", "position_avg", "x position (mm)")
+plot_norm_avg(11:20, "x_inter", "position_avg", "x position (mm)")
+plot_norm_avg(21:33, "x_inter", "position_avg", "x position (mm)")
 # Y
-plot_norm_avg(1:10, "y_inter")
-plot_norm_avg(11:20, "y_inter")
-plot_norm_avg(21:33, "y_inter")
+plot_norm_avg(1:10, "y_inter", "position_avg", "y position (mm)")
+plot_norm_avg(11:20, "y_inter", "position_avg", "y position (mm)")
+plot_norm_avg(21:33, "y_inter", "position_avg", "y position (mm)")
 # Z
-plot_norm_avg(1:10, "z_inter")
-plot_norm_avg(11:20, "z_inter")
-plot_norm_avg(21:33, "z_inter")
+plot_norm_avg(1:10, "z_inter", "position_avg", "z position (mm)")
+plot_norm_avg(11:20, "z_inter", "position_avg", "z position (mm)")
+plot_norm_avg(21:33, "z_inter", "position_avg", "z position (mm)")
 
 
-# now we average over participants
+# Normalize Grand Averages ----
 df_long_norm_avg %>%
   group_by(condition, coordinate, norm_time) %>%
   dplyr::summarise(
     position_grand_avg = median(position_avg) # MEDIAN
+    , velocity_grand_avg = median(velocity_avg)
+    , acceleration_grand_avg = median(acceleration_avg)
   ) -> df_long_norm_grand_avg
 
-plot_norm_grand_avg = function(dv) {
-  
+plot_norm_grand_avg = function(dv, dev, y_label) {
+  df_long_norm_grand_avg$tempy = dplyr::pull(df_long_norm_grand_avg, dev)
   df_long_norm_grand_avg %>%
     dplyr::filter(coordinate == dv) %>%
     ggplot()+
-    geom_line(aes(x=norm_time, y=position_grand_avg, group=condition, color=condition))+
+    geom_line(aes(x=norm_time, y=tempy, group=condition, color=condition))+
     xlab("normalized time")+
-    ylab(sprintf("%s grand average position (mm)", dv)) %>% print()
+    ylab(y_label) %>% print()
 }
 
 # X
-plot_norm_grand_avg("x_inter")
+plot_norm_grand_avg("x_inter", "position_grand_avg", "x position (mm)")
 # Y
-plot_norm_grand_avg("y_inter")
+plot_norm_grand_avg("y_inter", "position_grand_avg", "y position (mm)")
 # Z
-plot_norm_grand_avg("z_inter")
+plot_norm_grand_avg("z_inter", "position_grand_avg", "z position (mm)")
+
+
+
+
+##########################################################
+####            Normalized Velocity                   ####
+##########################################################
+
+# Normalized Trials ----
+# X
+plot_norm(1:10, "x_inter", "norm_velocity", "x velocity (mm/s)")
+plot_norm(11:20, "x_inter", "norm_velocity", "x velocity (mm/s)")
+plot_norm(21:33, "x_inter", "norm_velocity", "x velocity (mm/s)")
+# Y
+plot_norm(1:10, "y_inter", "norm_velocity", "y velocity (mm/s)")
+plot_norm(11:20, "y_inter", "norm_velocity", "y velocity (mm/s)")
+plot_norm(21:33, "y_inter", "norm_velocity", "y velocity (mm/s)")
+# Z
+plot_norm(1:10, "z_inter", "norm_velocity", "z velocity (mm/s)")
+plot_norm(11:20, "z_inter", "norm_velocity", "z velocity (mm/s)")
+plot_norm(21:33, "z_inter", "norm_velocity", "z velocity (mm/s)")
+
+
+
+# Normalized Averages ----
+# X
+plot_norm_avg(1:10, "x_inter", "velocity_avg", "x velocity (mm/s)")
+plot_norm_avg(11:20, "x_inter", "velocity_avg", "x velocity (mm/s)")
+plot_norm_avg(21:33, "x_inter", "velocity_avg", "x velocity (mm/s)")
+# Y
+plot_norm_avg(1:10, "y_inter", "velocity_avg", "y velocity (mm/s)")
+plot_norm_avg(11:20, "y_inter", "velocity_avg", "y velocity (mm/s)")
+plot_norm_avg(21:33, "y_inter", "velocity_avg", "y velocity (mm/s)")
+# Z
+plot_norm_avg(1:10, "z_inter", "velocity_avg", "z velocity (mm/s)")
+plot_norm_avg(11:20, "z_inter", "velocity_avg", "z velocity (mm/s)")
+plot_norm_avg(21:33, "z_inter", "velocity_avg", "z velocity (mm/s)")
+
+
+# Normalize Grand Averages ----
+# X
+plot_norm_grand_avg("x_inter", "velocity_grand_avg", "x velocity (mm/s)")
+# Y
+plot_norm_grand_avg("y_inter", "velocity_grand_avg", "y velocity (mm/s)")
+# Z
+plot_norm_grand_avg("z_inter", "velocity_grand_avg", "z velocity (mm/s)")
+
+
+
+
+##########################################################
+####            Normalized Acceleration               ####
+##########################################################
+
+# Normalized Trials ----
+# X
+plot_norm(1:10, "x_inter", "norm_acceleration", "x acceleration (mm/s^2)")
+plot_norm(11:20, "x_inter", "norm_acceleration", "x acceleration (mm/s^2)")
+plot_norm(21:33, "x_inter", "norm_acceleration", "x acceleration (mm/s^2)")
+# Y
+plot_norm(1:10, "y_inter", "norm_acceleration", "y acceleration (mm/s^2)")
+plot_norm(11:20, "y_inter", "norm_acceleration", "y acceleration (mm/s^2)")
+plot_norm(21:33, "y_inter", "norm_acceleration", "y acceleration (mm/s^2)")
+# Z
+plot_norm(1:10, "z_inter", "norm_acceleration", "z acceleration (mm/s^2)")
+plot_norm(11:20, "z_inter", "norm_acceleration", "z acceleration (mm/s^2)")
+plot_norm(21:33, "z_inter", "norm_acceleration", "z acceleration (mm/s^2)")
+
+
+
+# Normalized Averages ----
+# X
+plot_norm_avg(1:10, "x_inter", "acceleration_avg", "x acceleration (mm/s^2)")
+plot_norm_avg(11:20, "x_inter", "acceleration_avg", "x acceleration (mm/s^2)")
+plot_norm_avg(21:33, "x_inter", "acceleration_avg", "x acceleration (mm/s^2)")
+# Y
+plot_norm_avg(1:10, "y_inter", "acceleration_avg", "y acceleration (mm/s^2)")
+plot_norm_avg(11:20, "y_inter", "acceleration_avg", "y acceleration (mm/s^2)")
+plot_norm_avg(21:33, "y_inter", "acceleration_avg", "y acceleration (mm/s^2)")
+# Z
+plot_norm_avg(1:10, "z_inter", "acceleration_avg", "z acceleration (mm/s^2)")
+plot_norm_avg(11:20, "z_inter", "acceleration_avg", "z acceleration (mm/s^2)")
+plot_norm_avg(21:33, "z_inter", "acceleration_avg", "z acceleration (mm/s^2)")
+
+
+# Normalize Grand Averages ----
+# X
+plot_norm_grand_avg("x_inter", "acceleration_grand_avg", "x acceleration (mm/s^2)")
+# Y
+plot_norm_grand_avg("y_inter", "acceleration_grand_avg", "y acceleration (mm/s^2)")
+# Z
+plot_norm_grand_avg("z_inter", "acceleration_grand_avg", "z acceleration (mm/s^2)")
+
 
 
 
