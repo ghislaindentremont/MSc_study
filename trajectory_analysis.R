@@ -839,7 +839,7 @@ df_long %>% dplyr::filter(time > edge_start, time < edge_end) -> df_long_noedge
 # how far should the fixation* and target be apart?
 (ytargetcoor - yfixcoor)
 # what are the cutoffs for trial start and end?
-# start_line / 10 cm 
+# start_line in mm
 start_line = 10
 
 plot_bounds = function(ids_use, dv, y_label, start_line) {
@@ -1101,6 +1101,7 @@ df_long_trim_avg %>%
     position_grand_avg = median(position_avg) # MEDIAN
   ) -> df_long_trim_grand_avg
 
+# function
 plot_trim_grand_avg = function(dv) {
   
   df_long_trim_grand_avg %>%
@@ -1184,12 +1185,32 @@ df_long_norm %>%
     , acceleration_avg = median(norm_acceleration)
   ) -> df_long_norm_avg
 
+# get peak acceleration and decceleration values for each participant 
+df_long_norm_avg %>%
+  dplyr::group_by(pilot, id, condition, coordinate) %>%
+  dplyr::summarize(
+    peak_velocity = norm_time[which(velocity_avg == max(velocity_avg))]
+    , peak_acceleration = norm_time[which(acceleration_avg == max(acceleration_avg))]
+    , peak_deceleration = norm_time[which(acceleration_avg == min(acceleration_avg))]
+  ) -> kms
+
+# create function
 plot_norm_avg = function(ids_use, dv, dev, y_label) {
   df_long_norm_avg$tempy = dplyr::pull(df_long_norm_avg, dev)
+  rang = range(df_long_norm_avg$tempy[df_long_norm_avg$coordinate == dv])
+  data_range = rang[2] - rang[1]
+  bottom = rang[1]
+  top = rang[2]
+  
+  kin_dat = kms[kms$coordinate == dv & (as.numeric(kms$id) %in% ids_use),]
+  
   df_long_norm_avg %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
     geom_line(aes(x=norm_time, y=tempy, group=id, color=id), size = .3)+
+    geom_point(data = kin_dat, aes(x=peak_velocity, y=top + data_range/50, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=peak_acceleration, y=top, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=peak_deceleration, y=bottom, group=id, color=id), size = 1)+
     xlab("normalized time")+
     ylab(y_label)+
     facet_grid(.~condition) %>% print()
@@ -1218,12 +1239,42 @@ df_long_norm_avg %>%
     , acceleration_grand_avg = median(acceleration_avg)
   ) -> df_long_norm_grand_avg
 
+# get average kinematic markers for each group
+kms %>%
+  dplyr::group_by(condition, coordinate) %>%
+  dplyr::summarise(
+    peak_velocity_avg = median(peak_velocity) # MEDIAN
+    , peak_acceleration_avg = median(peak_acceleration)
+    , peak_deceleration_avg =  median(peak_deceleration)
+  ) -> kms_avg
+
+# get kinematic markers of each avrage
+df_long_norm_grand_avg %>%
+  dplyr::group_by(condition, coordinate) %>%
+  dplyr::summarize(
+    grand_peak_velocity = norm_time[which(velocity_grand_avg == max(velocity_grand_avg))]
+    , grand_peak_acceleration = norm_time[which(acceleration_grand_avg == max(acceleration_grand_avg))]
+    , grand_peak_deceleration = norm_time[which(acceleration_grand_avg == min(acceleration_grand_avg))]
+  ) -> grand_kms
+  
+
+# function
 plot_norm_grand_avg = function(dv, dev, y_label) {
   df_long_norm_grand_avg$tempy = dplyr::pull(df_long_norm_grand_avg, dev)
+  rang = range(df_long_norm_grand_avg$tempy[df_long_norm_grand_avg$coordinate == dv])
+  data_range = rang[2] - rang[1]
+  bottom = rang[1]
+  top = rang[2]
+  
+  kin_dat_avg = kms_avg[kms_avg$coordinate == dv,]
+  
   df_long_norm_grand_avg %>%
     dplyr::filter(coordinate == dv) %>%
     ggplot()+
     geom_line(aes(x=norm_time, y=tempy, group=condition, color=condition))+
+    geom_point(data = kin_dat_avg, aes(x=peak_velocity_avg, y=top+data_range/50, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat_avg, aes(x=peak_acceleration_avg, y=top, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat_avg, aes(x=peak_deceleration_avg, y=bottom, group=condition, color=condition), size = 1)+
     xlab("normalized time")+
     ylab(y_label) %>% print()
 }
@@ -1255,7 +1306,6 @@ plot_norm(21:33, "y_inter", "norm_velocity", "y velocity (mm/s)")
 plot_norm(1:10, "z_inter", "norm_velocity", "z velocity (mm/s)")
 plot_norm(11:20, "z_inter", "norm_velocity", "z velocity (mm/s)")
 plot_norm(21:33, "z_inter", "norm_velocity", "z velocity (mm/s)")
-
 
 
 # Normalized Averages ----
@@ -1342,10 +1392,20 @@ df_long_norm %>%
 # function to plot spatial variability
 plot_spat_var = function(ids_use, dv) {
   
+  rang = range(df_long_spat_var$spat_var[df_long_spat_var$coordinate == dv])
+  data_range = rang[2] - rang[1]
+  bottom = rang[1]
+  top = rang[2]
+  
+  kin_dat = kms[kms$coordinate == dv & (as.numeric(kms$id) %in% ids_use),]
+  
   df_long_spat_var %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
     geom_line(aes(x=norm_time, y=spat_var, group=id, color=id), alpha = 0.5, size = .5)+
+    geom_point(data = kin_dat, aes(x=peak_velocity, y=top + data_range/50, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=peak_acceleration, y=top, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=peak_deceleration, y=bottom, group=id, color=id), size = 1)+
     xlab("normalized time")+
     ylab(sprintf("%s spatial variability (sd)", dv))+
     facet_grid(.~condition) %>% print()
@@ -1372,11 +1432,21 @@ df_long_spat_var %>%
 
 # a function to plot group spatial variability profiles
 plot_spat_var_avg = function(dv) {
+    
+  rang = range(df_long_spat_var_avg$spat_var_avg[df_long_spat_var_avg$coordinate == dv])
+  data_range = rang[2] - rang[1]
+  bottom = rang[1]
+  top = rang[2]
+  
+  kin_dat_avg = kms_avg[kms_avg$coordinate == dv,]
   
   df_long_spat_var_avg %>%
     dplyr::filter(coordinate == dv) %>%
     ggplot()+
     geom_line(aes(x=norm_time, y=spat_var_avg, group=condition, color=condition))+
+    geom_point(data = kin_dat_avg, aes(x=peak_velocity_avg, y=top + data_range/50, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat_avg, aes(x=peak_acceleration_avg, y=top, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat_avg, aes(x=peak_deceleration_avg, y=bottom, group=condition, color=condition), size = 1)+
     xlab("normalized time")+
     ylab(sprintf("%s average spatial variability (sd)", dv)) %>% print()
 }
