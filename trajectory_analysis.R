@@ -9,9 +9,9 @@ setwd("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Stu
 
 
 
-##############################
-#       Touch Screen
-##############################
+########################################################
+####            Touch Screen                        ####
+########################################################
 
 dat = map_df(
   .x = list.files(
@@ -82,7 +82,7 @@ plot_outcomes = function(ids_use, dv, xlabel, summa = F) {
     geom_density(data = subset(dat, condition == "no_vision" & as.numeric(id) %in% ids_use), aes(temp, ..density..), color = "red")+
     geom_histogram(data = subset(dat, condition == "vision" & as.numeric(id) %in% ids_use), aes(temp, ..density..), bins=20, alpha = 0.2, fill = "blue")+
     geom_density(data = subset(dat, condition == "vision" & as.numeric(id) %in% ids_use), aes(temp, ..density..), color = "blue")+
-    facet_grid(practice~id)+
+    facet_grid(id~practice)+
     xlab(sprintf("%s (ms)", xlabel))
   print(gg)
   
@@ -214,6 +214,7 @@ dat %>%
 ########################################################
 ####              Bad Trial Information             ####
 ########################################################
+
 dat$ez_trial = ifelse(
   dat$block == 1
   , dat$trial
@@ -978,12 +979,16 @@ rm(df_long_velo)
 
 
 # 200 Hz = 200 samples/second ... 'ma_length_ms'/1000 seconds * 200 samples/second = 'ma_length' samples
-ma_length = 5
-ma_length_ms = ma_length * 1000/200
+# start
+ma_length_start = 5
+ma_length_start_ms = ma_length_start * 1000/200
+# end
+ma_length_end = 5
+ma_length_end_ms = ma_length_end * 1000/200
 # we ignore seperations among ids, coordinates, and trials for efficiency
 # the following processing should make it so that this does not effect trial starts and ends
-df_long_clean$potential_start = as.numeric(ma(df_long_clean$non_stationary & df_long_clean$moved, ma_length))  
-df_long_clean$potential_end = as.numeric(ma(df_long_clean$stationary, ma_length)) 
+df_long_clean$potential_start = as.numeric(ma(df_long_clean$non_stationary & df_long_clean$moved, ma_length_start))  
+df_long_clean$potential_end = as.numeric(ma(df_long_clean$stationary, ma_length_end)) 
 
 # I actually think this is faster than just using mutate
 df_long_clean$trial_start_bool = df_long_clean$potential_start == 1
@@ -998,17 +1003,17 @@ df_long_clean$trial_end_bool_2 = df_long_clean$trial_end_diff == 1
 df_long_clean$trial_end_frame = df_long_clean$trial_end_bool_2 * df_long_clean$frame - 1
 
 # give some space 
-buffer_start = 0
+buffer_start = 5
 buffer_start_ms = buffer_start * 1000/200
 
-buffer_end = 0
+buffer_end = 5
 buffer_end_ms = buffer_end * 1000/200
 
 df_long_clean %>%
   group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::mutate(
-    trial_start = sort(unique(trial_start_frame))[2] - (ma_length-1)/2 - buffer_start   # we pick the second lowest because there are many zeroes
-    , trial_end = sort(unique(trial_end_frame))[2] + (ma_length-1)/2  + buffer_end  # we pick the second lowest because there are many -1s
+    trial_start = sort(unique(trial_start_frame))[2] - (ma_length_start-1)/2 - buffer_start   # we pick the second lowest because there are many zeroes
+    , trial_end = sort(unique(trial_end_frame))[2] + (ma_length_end-1)/2  + buffer_end  # we pick the second lowest because there are many -1s
   ) -> df_long_clean
 
 df_long_clean %>%
@@ -1054,6 +1059,9 @@ plot_trim(21:33, "x_inter", "x position (mm)")
 plot_trim(1:10, "y_inter", "y position (mm)")
 plot_trim(11:20, "y_inter", "y position (mm)")
 plot_trim(21:33, "y_inter", "y position (mm)")
+# this participant has one particularly bad start time
+# a few other participants have bad stop times 
+plot_trim(18, "y_inter", "bad y position (mm)")
 # Z
 plot_trim(1:10, "z_inter", "z position (mm)")
 plot_trim(11:20, "z_inter", "z position (mm)")
@@ -1065,7 +1073,7 @@ plot_trim(21:33, "z_inter", "z position (mm)")
 df_long_trim %>%
   group_by(pilot, id, condition, coordinate, zero_time) %>%
   dplyr::summarise(
-    position_avg = median(centered_position) # MEDIAN
+    position_avg = mean(centered_position) 
   ) -> df_long_trim_avg
 
 plot_trim_avg = function(ids_use, dv) {
@@ -1098,7 +1106,7 @@ plot_trim_avg(21:33, "z_inter")
 df_long_trim_avg %>%
   group_by(condition, coordinate, zero_time) %>%
   dplyr::summarise(
-    position_grand_avg = median(position_avg) # MEDIAN
+    position_grand_avg = mean(position_avg) 
   ) -> df_long_trim_grand_avg
 
 # function
@@ -1143,9 +1151,9 @@ df_long_trim %>%
 df_long_norm2 %>%
   dplyr::group_by(pilot, id, condition, trial, coordinate, norm_time) %>%
   dplyr::mutate(
-    norm_position = median(centered_position) # MEDIAN
-    , norm_velocity = median(velocity)
-    , norm_acceleration = median(acceleration)
+    norm_position = mean(centered_position) 
+    , norm_velocity = mean(velocity)
+    , norm_acceleration = mean(acceleration)
   ) -> df_long_norm
 
 
@@ -1180,9 +1188,9 @@ plot_norm(21:33, "z_inter", "norm_position", "z position (mm)")
 df_long_norm %>%
   group_by(pilot, id, condition, coordinate, norm_time) %>%
   dplyr::summarise(
-    position_avg = median(norm_position) # MEDIAN
-    , velocity_avg = median(norm_velocity)
-    , acceleration_avg = median(norm_acceleration)
+    position_avg = mean(norm_position)
+    , velocity_avg = mean(norm_velocity)
+    , acceleration_avg = mean(norm_acceleration)
   ) -> df_long_norm_avg
 
 # get peak acceleration and decceleration values for each participant 
@@ -1234,19 +1242,20 @@ plot_norm_avg(21:33, "z_inter", "position_avg", "z position (mm)")
 df_long_norm_avg %>%
   group_by(condition, coordinate, norm_time) %>%
   dplyr::summarise(
-    position_grand_avg = median(position_avg) # MEDIAN
-    , velocity_grand_avg = median(velocity_avg)
-    , acceleration_grand_avg = median(acceleration_avg)
+    position_grand_avg = mean(position_avg) 
+    , velocity_grand_avg = mean(velocity_avg)
+    , acceleration_grand_avg = mean(acceleration_avg)
   ) -> df_long_norm_grand_avg
 
 # get average kinematic markers for each group
 kms %>%
   dplyr::group_by(condition, coordinate) %>%
   dplyr::summarise(
-    peak_velocity_avg = median(peak_velocity) # MEDIAN
-    , peak_acceleration_avg = median(peak_acceleration)
-    , peak_deceleration_avg =  median(peak_deceleration)
+    peak_velocity_avg = mean(peak_velocity) 
+    , peak_acceleration_avg = mean(peak_acceleration)
+    , peak_deceleration_avg =  mean(peak_deceleration)
   ) -> kms_avg
+kms_avg
 
 # get kinematic markers of each avrage
 df_long_norm_grand_avg %>%
@@ -1256,6 +1265,7 @@ df_long_norm_grand_avg %>%
     , grand_peak_acceleration = norm_time[which(acceleration_grand_avg == max(acceleration_grand_avg))]
     , grand_peak_deceleration = norm_time[which(acceleration_grand_avg == min(acceleration_grand_avg))]
   ) -> grand_kms
+grand_kms
   
 
 # function
@@ -1380,7 +1390,6 @@ plot_norm_grand_avg("z_inter", "acceleration_grand_avg", "z acceleration (mm/s^2
 
 
 
-
 ##########################################################
 ####          Spatial Variability Profiles            ####
 ##########################################################
@@ -1390,7 +1399,7 @@ df_long_norm %>%
   dplyr::summarise(spat_var = sd(norm_position)) -> df_long_spat_var
 
 # function to plot spatial variability
-plot_spat_var = function(ids_use, dv) {
+plot_spat_var = function(ids_use, dv, y_label) {
   
   rang = range(df_long_spat_var$spat_var[df_long_spat_var$coordinate == dv])
   data_range = rang[2] - rang[1]
@@ -1407,31 +1416,34 @@ plot_spat_var = function(ids_use, dv) {
     geom_point(data = kin_dat, aes(x=peak_acceleration, y=top, group=id, color=id), size = 1)+
     geom_point(data = kin_dat, aes(x=peak_deceleration, y=bottom, group=id, color=id), size = 1)+
     xlab("normalized time")+
-    ylab(sprintf("%s spatial variability (sd)", dv))+
+    ylab(y_label)+
     facet_grid(.~condition) %>% print()
 }
 
 # X
-plot_spat_var(1:10, "x_inter")
-plot_spat_var(11:20, "x_inter")
-plot_spat_var(21:33, "x_inter")
+plot_spat_var(1:10, "x_inter", "x spatial variability (sd)")
+plot_spat_var(11:20, "x_inter", "x spatial variability (sd)")
+plot_spat_var(21:33, "x_inter", "x spatial variability (sd)")
 # Y
-plot_spat_var(1:10, "y_inter")
-plot_spat_var(11:20, "y_inter")
-plot_spat_var(21:33, "y_inter")
+plot_spat_var(1:10, "y_inter", "y spatial variability (sd)")
+plot_spat_var(11:20, "y_inter", "y spatial variability (sd)")
+plot_spat_var(21:33, "y_inter", "y spatial variability (sd)")
 # Z
-plot_spat_var(1:10, "z_inter")
-plot_spat_var(11:20, "z_inter")
-plot_spat_var(21:33, "z_inter")
+plot_spat_var(1:10, "z_inter", "z spatial variability (sd)")
+plot_spat_var(11:20, "z_inter", "z spatial variability (sd)")
+plot_spat_var(21:33, "z_inter", "z spatial variability (sd)")
 
 
 # Average of Spatial Variabilty Profiles ----
 df_long_spat_var %>%
   dplyr::group_by(condition, coordinate, norm_time) %>%
-  dplyr::summarise(spat_var_avg = median(spat_var)) -> df_long_spat_var_avg  # MEDIAN
+  dplyr::summarise(spat_var_avg = mean(spat_var)) -> df_long_spat_var_avg  
+
+# NOTE: outlying trials/participants are affecting results
+# difference between mean and median averages
 
 # a function to plot group spatial variability profiles
-plot_spat_var_avg = function(dv) {
+plot_spat_var_avg = function(dv, y_label) {
     
   rang = range(df_long_spat_var_avg$spat_var_avg[df_long_spat_var_avg$coordinate == dv])
   data_range = rang[2] - rang[1]
@@ -1448,12 +1460,157 @@ plot_spat_var_avg = function(dv) {
     geom_point(data = kin_dat_avg, aes(x=peak_acceleration_avg, y=top, group=condition, color=condition), size = 1)+
     geom_point(data = kin_dat_avg, aes(x=peak_deceleration_avg, y=bottom, group=condition, color=condition), size = 1)+
     xlab("normalized time")+
-    ylab(sprintf("%s average spatial variability (sd)", dv)) %>% print()
+    ylab(y_label) %>% print()
 }
 
 # X
-plot_spat_var_avg("x_inter")
+plot_spat_var_avg("x_inter", "x spatial variability (sd)")
 # Y
-plot_spat_var_avg("y_inter")
+plot_spat_var_avg("y_inter", "y spatial variability (sd)")
 # Z
-plot_spat_var_avg("z_inter")
+plot_spat_var_avg("z_inter", "z spatial variability (sd)")
+
+
+
+
+########################################################
+####            Outcome Variables                   ####
+########################################################
+
+df_long_norm %>%
+  dplyr::group_by(pilot, id, condition, trial, blocking) %>%
+  dplyr::summarise(
+    good_movement_time = unique(good_movement_time)
+    , good_response_time = unique(good_response_time)
+    , good_rt = unique(good_rt)
+    , fix_error = unique(fix_error)
+    , target_error = unique(target_error)
+    , good_yfix = unique(good_yfix)
+    , good_xfix = unique(good_xfix)
+    , good_ytarget = unique(good_ytarget)
+    , good_xtarget = unique(good_xtarget)
+  ) -> df_outcomes
+
+# summarize cleaned outcome variable data
+summary(df_outcomes)
+# see how well counter balanced block is
+df_outcomes %>%
+  dplyr::group_by(blocking) %>%
+  dplyr::summarise(
+    count = length(unique(id))
+  )   
+
+# how many trials per condition per participant
+df_outcomes %>%
+  dplyr::group_by(id, condition) %>%
+  dplyr::summarise(
+    count = length(unique(trial))
+  ) %>% print(n=n*2) -> reduced
+# compare to non-reduce data frame
+df_long_norm %>%
+  dplyr::group_by(id, condition) %>%
+  dplyr::summarise(
+    count = length(unique(trial))
+  ) -> full
+mean(reduced$count == full$count)
+
+
+
+# create function
+plot_clean_outcomes = function(ids_use, dv, xlabel, summa = F) {
+  
+  df_outcomes$temp = dplyr::pull(df_outcomes, dv)
+  
+  gg = ggplot()+
+    geom_histogram(data = subset(df_outcomes, condition == "no_vision" & as.numeric(id) %in% ids_use), aes(temp, ..density..), bins=20, alpha = 0.2, fill = "red")+
+    geom_density(data = subset(df_outcomes, condition == "no_vision" & as.numeric(id) %in% ids_use), aes(temp, ..density..), color = "red")+
+    geom_histogram(data = subset(df_outcomes, condition == "vision" & as.numeric(id) %in% ids_use), aes(temp, ..density..), bins=20, alpha = 0.2, fill = "blue")+
+    geom_density(data = subset(df_outcomes, condition == "vision" & as.numeric(id) %in% ids_use), aes(temp, ..density..), color = "blue")+
+    facet_grid(id~.)+
+    xlab(sprintf("%s (ms)", xlabel))
+  print(gg)
+  
+  if (summa) {
+    df_outcomes %>%
+      dplyr::group_by(pilot, id, condition) %>%
+      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+      dplyr::group_by(condition) %>%
+      dplyr::summarize(mean_tot = mean(mean_id, na.rm = T))%>%
+      print()
+    df_outcomes %>%
+      dplyr::group_by(pilot, id, condition) %>%
+      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+      dplyr::group_by(condition) %>%
+      dplyr::summarize(sd_tot = sd(mean_id, na.rm = T))%>%
+      print()
+    # sd of difference
+    df_outcomes %>%
+      dplyr::group_by(pilot, id, condition) %>%
+      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+      dplyr::group_by(pilot, id) %>%
+      dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
+      dplyr::group_by() %>%
+      dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
+      print()
+  }
+}
+
+
+# Reaction Time ----
+plot_clean_outcomes(1:10, "good_rt", "reaction time")
+plot_clean_outcomes(11:20, "good_rt", "reaction time")
+plot_clean_outcomes(21:33, "good_rt", "reaction time", T)
+
+
+# Response Time ----
+plot_clean_outcomes(1:10, "good_response_time", "response time")
+plot_clean_outcomes(11:20, "good_response_time", "response time")
+plot_clean_outcomes(21:33, "good_response_time", "response time", T)
+
+
+# Movement Time ----
+plot_clean_outcomes(1:10, "good_movement_time", "movement time")
+plot_clean_outcomes(11:20, "good_movement_time", "movement time")
+plot_clean_outcomes(21:33, "good_movement_time", "movement time", T)
+
+
+# Movement Error ----
+plot_clean_error = function(ids_use) {
+  
+  df_outcomes %>%
+    dplyr::filter(as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_point(aes(x=good_xfix, y=good_yfix, group = id), na.rm = T, size = 0.25)+
+    geom_point(aes(x=xfixcoor, y=yfixcoor, group = id), na.rm = T, size = 0.5, color = "red")+
+    geom_point(aes(x=good_xtarget, y=good_ytarget, group = id), na.rm = T, size = 0.25)+
+    geom_point(aes(x=xtargetcoor, y=ytargetcoor, group = id), na.rm = T, size = 0.5, color = "red")+
+    xlim(c(0, xdim))+
+    ylim(c(0, ydim))+
+    xlab("x (mm)")+
+    ylab("y (mm)")+
+    facet_grid(condition~id) %>% print()
+}
+
+# use function
+plot_clean_error(1:10)
+plot_clean_error(11:20)
+plot_clean_error(21:33)
+
+# look at error 
+df_outcomes %>%
+  group_by(pilot, id, condition) %>%
+  dplyr::summarize(mean_id_target_error = mean(target_error, na.rm = T)) %>%
+  group_by(condition) %>%
+  dplyr::summarize(mean_target_error = mean(mean_id_target_error, na.rm = T)) 
+df_outcomes %>%
+  group_by(pilot, id, condition) %>%
+  dplyr::summarize(mean_id_target_error = mean(target_error, na.rm = T)) %>%
+  group_by(condition) %>%
+  dplyr::summarize(sd_target_error = sd(mean_id_target_error, na.rm = T)) 
+df_outcomes %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarize(mean_id = mean(target_error, na.rm = T)) %>%
+  dplyr::group_by(pilot, id) %>%
+  dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
+  dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
+  print()
