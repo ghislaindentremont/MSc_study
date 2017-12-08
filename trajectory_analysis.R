@@ -73,7 +73,7 @@ dat$condition = factor(ifelse((dat$blocking == "vision" & (dat$block == 1 | dat$
 
 summary(dat)
 
-plot_outcomes = function(ids_use, dv, xlabel, summa = F) {
+plot_outcomes = function(ids_use, dv, xlabel) {
   
   dat$temp = dplyr::pull(dat, dv)
   
@@ -85,8 +85,11 @@ plot_outcomes = function(ids_use, dv, xlabel, summa = F) {
     facet_grid(id~practice)+
     xlab(sprintf("%s (ms)", xlabel))
   print(gg)
-  
-  if (summa) {
+}
+
+sum_outcomes = function(dv, practice = T) {
+  if (practice) {
+    dat$temp = dplyr::pull(dat, dv)
     dat %>%
       dplyr::group_by(pilot, id, practice, condition) %>%
       dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
@@ -108,16 +111,40 @@ plot_outcomes = function(ids_use, dv, xlabel, summa = F) {
       dplyr::group_by(practice) %>%
       dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
       print()
+  } else {
+    dat$temp = dplyr::pull(dat, dv)
+    dat %>%
+      dplyr::group_by(blocking, pilot, id, condition) %>%
+      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+      dplyr::group_by(blocking, condition) %>%
+      dplyr::summarize(mean_tot = mean(mean_id, na.rm = T))%>%
+      print()
+    dat %>%
+      dplyr::group_by(blocking, pilot, id, condition) %>%
+      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+      dplyr::group_by(blocking, condition) %>%
+      dplyr::summarize(sd_tot = sd(mean_id, na.rm = T))%>%
+      print()
+    # sd of difference
+    dat %>%
+      dplyr::group_by(blocking, pilot, id, condition) %>%
+      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+      dplyr::group_by(blocking, pilot, id) %>%
+      dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
+      dplyr::group_by(blocking) %>%
+      dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
+      print()
   }
 }
-
 
 # Reaction Time ----
 dat$good_rt = dat$rt * 1000
 
 plot_outcomes(1:10, "good_rt", "reaction time")
 plot_outcomes(11:20, "good_rt", "reaction time")
-plot_outcomes(21:33, "good_rt", "reaction time", T)
+plot_outcomes(21:33, "good_rt", "reaction time")
+sum_outcomes("good_rt")
+sum_outcomes("good_rt", F)
 
 
 # Response Time ----
@@ -126,6 +153,8 @@ dat$good_response_time = dat$response_time * 1000
 plot_outcomes(1:10, "good_response_time", "response time")
 plot_outcomes(11:20, "good_response_time", "response time")
 plot_outcomes(21:33, "good_response_time", "response time", T)
+sum_outcomes("good_response_time")
+sum_outcomes("good_response_time", F)
 
 
 # Movement Time ----
@@ -134,9 +163,11 @@ dat$good_movement_time = dat$good_response_time - dat$good_rt
 plot_outcomes(1:10, "good_movement_time", "movement time")
 plot_outcomes(11:20, "good_movement_time", "movement time")
 plot_outcomes(21:33, "good_movement_time", "movement time", T)
+sum_outcomes("good_movement_time")
+sum_outcomes("good_movement_time", F)
 
 
-# Movement Error ----
+# Compute Touch Errors ----
 
 # define touch screen parameters in terms of participant coordinates
 mm_per_pixel =  0.26458333333333
@@ -165,7 +196,6 @@ dat$good_ytarget = ydim - dat$xtarget * mm_per_pixel
 
 # create function
 plot_error = function(ids_use) {
-  
   dat %>%
     dplyr::filter(practice == "experimental", as.numeric(id) %in% ids_use) %>%
     ggplot()+
@@ -185,29 +215,27 @@ plot_error(1:10)
 plot_error(11:20)
 plot_error(21:33)
 
-# look at error 
+
+# Absolute (2D) Error ----
+# at fixation
 dat$fix_error = sqrt((dat$good_xfix - xfixcoor)^2 + (dat$good_yfix - yfixcoor)^2)
+sum_outcomes("fix_error")
+
+# at target
 dat$target_error = sqrt((dat$good_xtarget - xtargetcoor)^2 + (dat$good_ytarget - ytargetcoor)^2)  
+sum_outcomes("target_error")
 
-dat %>%
-  group_by(pilot, id, practice, condition) %>%
-  dplyr::summarize(mean_id_target_error = mean(target_error, na.rm = T)) %>%
-  group_by(practice, condition) %>%
-  dplyr::summarize(mean_target_error = mean(mean_id_target_error, na.rm = T)) 
-dat %>%
-  group_by(pilot, id, practice, condition) %>%
-  dplyr::summarize(mean_id_target_error = mean(target_error, na.rm = T)) %>%
-  group_by(practice, condition) %>%
-  dplyr::summarize(sd_target_error = sd(mean_id_target_error, na.rm = T)) 
-dat %>%
-  dplyr::group_by(pilot, id, practice, condition) %>%
-  dplyr::summarize(mean_id = mean(target_error, na.rm = T)) %>%
-  dplyr::group_by(pilot, id, practice) %>%
-  dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
-  dplyr::group_by(practice) %>%
-  dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
-  print()
 
+# Amplitude Errors ----
+dat$CE_amp = dat$good_ytarget - ytargetcoor
+# both Constant (first) and Variable Errors (second) are Shown
+sum_outcomes("CE_amp")
+
+
+# Directional Errors ----
+dat$CE_dir = dat$good_xtarget - xtargetcoor
+# both Constant (first) and Variable Errors (second) are Shown
+sum_outcomes("CE_dir")
 
 
 
@@ -868,7 +896,7 @@ df_long_noedge$velocity = c(0, diff(df_long_noedge$centered_position))/(1/sampli
 # (position/second)/(frame * seconds/frame) = position/second^2
 df_long_noedge$acceleration = c(0, diff(df_long_noedge$velocity))/(1/sampling_freq)
 
-df_long_noedge %>% dplyr::filter(time != edge_line + 1000/sampling_freq) -> df_long_clean  # getting rid of first frame
+df_long_noedge %>% dplyr::filter(time != edge_start + 1000/sampling_freq) -> df_long_clean  # getting rid of first frame
 # rm(df_long_noedge)
 
 # create function to plot velocity and acceleration
@@ -1186,7 +1214,7 @@ plot_norm(21:33, "z_inter", "norm_position", "z position (mm)")
 
 # Normalized Averages ----
 df_long_norm %>%
-  group_by(pilot, id, condition, coordinate, norm_time) %>%
+  group_by(blocking, pilot, id, condition, coordinate, norm_time) %>%
   dplyr::summarise(
     position_avg = mean(norm_position)
     , velocity_avg = mean(norm_velocity)
@@ -1195,7 +1223,7 @@ df_long_norm %>%
 
 # get peak acceleration and decceleration values for each participant 
 df_long_norm_avg %>%
-  dplyr::group_by(pilot, id, condition, coordinate) %>%
+  dplyr::group_by(blocking, pilot, id, condition, coordinate) %>%
   dplyr::summarize(
     peak_velocity = norm_time[which(velocity_avg == max(velocity_avg))]
     , peak_acceleration = norm_time[which(acceleration_avg == max(acceleration_avg))]
@@ -1240,7 +1268,7 @@ plot_norm_avg(21:33, "z_inter", "position_avg", "z position (mm)")
 
 # Normalize Grand Averages ----
 df_long_norm_avg %>%
-  group_by(condition, coordinate, norm_time) %>%
+  group_by(blocking, condition, coordinate, norm_time) %>%
   dplyr::summarise(
     position_grand_avg = mean(position_avg) 
     , velocity_grand_avg = mean(velocity_avg)
@@ -1249,7 +1277,7 @@ df_long_norm_avg %>%
 
 # get average kinematic markers for each group
 kms %>%
-  dplyr::group_by(condition, coordinate) %>%
+  dplyr::group_by(blocking, condition, coordinate) %>%
   dplyr::summarise(
     peak_velocity_avg = mean(peak_velocity) 
     , peak_acceleration_avg = mean(peak_acceleration)
@@ -1259,7 +1287,7 @@ kms_avg
 
 # get kinematic markers of each avrage
 df_long_norm_grand_avg %>%
-  dplyr::group_by(condition, coordinate) %>%
+  dplyr::group_by(blocking, condition, coordinate) %>%
   dplyr::summarize(
     grand_peak_velocity = norm_time[which(velocity_grand_avg == max(velocity_grand_avg))]
     , grand_peak_acceleration = norm_time[which(acceleration_grand_avg == max(acceleration_grand_avg))]
@@ -1280,11 +1308,12 @@ plot_norm_grand_avg = function(dv, dev, y_label) {
   
   df_long_norm_grand_avg %>%
     dplyr::filter(coordinate == dv) %>%
-    ggplot()+
-    geom_line(aes(x=norm_time, y=tempy, group=condition, color=condition))+
+    ggplot(aes(x=norm_time, y=tempy, group=condition, color=condition))+
+    geom_line()+
     geom_point(data = kin_dat_avg, aes(x=peak_velocity_avg, y=top+data_range/50, group=condition, color=condition), size = 1)+
     geom_point(data = kin_dat_avg, aes(x=peak_acceleration_avg, y=top, group=condition, color=condition), size = 1)+
     geom_point(data = kin_dat_avg, aes(x=peak_deceleration_avg, y=bottom, group=condition, color=condition), size = 1)+
+    facet_grid(.~blocking)+
     xlab("normalized time")+
     ylab(y_label) %>% print()
 }
@@ -1442,6 +1471,26 @@ df_long_spat_var %>%
 # NOTE: outlying trials/participants are affecting results
 # difference between mean and median averages
 
+# get average kinematic markers for each group
+kms %>%
+  dplyr::group_by(condition, coordinate) %>%
+  dplyr::summarise(
+    peak_velocity_avg = mean(peak_velocity) 
+    , peak_acceleration_avg = mean(peak_acceleration)
+    , peak_deceleration_avg =  mean(peak_deceleration)
+  ) -> spat_kms_avg
+spat_kms_avg
+
+# get kinematic markers of each avrage
+df_long_norm_grand_avg %>%
+  dplyr::group_by(condition, coordinate) %>%
+  dplyr::summarize(
+    grand_peak_velocity = norm_time[which(velocity_grand_avg == max(velocity_grand_avg))]
+    , grand_peak_acceleration = norm_time[which(acceleration_grand_avg == max(acceleration_grand_avg))]
+    , grand_peak_deceleration = norm_time[which(acceleration_grand_avg == min(acceleration_grand_avg))]
+  ) -> spat_grand_kms
+spat_grand_kms
+
 # a function to plot group spatial variability profiles
 plot_spat_var_avg = function(dv, y_label) {
     
@@ -1450,7 +1499,7 @@ plot_spat_var_avg = function(dv, y_label) {
   bottom = rang[1]
   top = rang[2]
   
-  kin_dat_avg = kms_avg[kms_avg$coordinate == dv,]
+  kin_dat_avg = spat_kms_avg[spat_kms_avg$coordinate == dv,]
   
   df_long_spat_var_avg %>%
     dplyr::filter(coordinate == dv) %>%
@@ -1478,17 +1527,15 @@ plot_spat_var_avg("z_inter", "z spatial variability (sd)")
 ########################################################
 
 df_long_norm %>%
-  dplyr::group_by(pilot, id, condition, trial, blocking) %>%
+  dplyr::group_by(blocking, pilot, id, condition, trial) %>%
   dplyr::summarise(
     good_movement_time = unique(good_movement_time)
     , good_response_time = unique(good_response_time)
     , good_rt = unique(good_rt)
     , fix_error = unique(fix_error)
     , target_error = unique(target_error)
-    , good_yfix = unique(good_yfix)
-    , good_xfix = unique(good_xfix)
-    , good_ytarget = unique(good_ytarget)
-    , good_xtarget = unique(good_xtarget)
+    , CE_amp = unique(CE_amp)
+    , CE_dir = unique(CE_dir)
   ) -> df_outcomes
 
 # summarize cleaned outcome variable data
@@ -1517,7 +1564,7 @@ mean(reduced$count == full$count)
 
 
 # create function
-plot_clean_outcomes = function(ids_use, dv, xlabel, summa = F) {
+plot_clean_outcomes = function(ids_use, dv, xlabel) {
   
   df_outcomes$temp = dplyr::pull(df_outcomes, dv)
   
@@ -1529,49 +1576,53 @@ plot_clean_outcomes = function(ids_use, dv, xlabel, summa = F) {
     facet_grid(id~.)+
     xlab(sprintf("%s (ms)", xlabel))
   print(gg)
-  
-  if (summa) {
-    df_outcomes %>%
-      dplyr::group_by(pilot, id, condition) %>%
-      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
-      dplyr::group_by(condition) %>%
-      dplyr::summarize(mean_tot = mean(mean_id, na.rm = T))%>%
-      print()
-    df_outcomes %>%
-      dplyr::group_by(pilot, id, condition) %>%
-      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
-      dplyr::group_by(condition) %>%
-      dplyr::summarize(sd_tot = sd(mean_id, na.rm = T))%>%
-      print()
-    # sd of difference
-    df_outcomes %>%
-      dplyr::group_by(pilot, id, condition) %>%
-      dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
-      dplyr::group_by(pilot, id) %>%
-      dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
-      dplyr::group_by() %>%
-      dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
-      print()
-  }
+}
+
+sum_clean_outcomes = function(dv) {
+  df_outcomes$temp = dplyr::pull(df_outcomes, dv)
+  df_outcomes %>%
+    dplyr::group_by(blocking, pilot, id, condition) %>%
+    dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+    dplyr::group_by(blocking, condition) %>%
+    dplyr::summarize(mean_tot = mean(mean_id, na.rm = T))%>%
+    print()
+  df_outcomes %>%
+    dplyr::group_by(blocking, pilot, id, condition) %>%
+    dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+    dplyr::group_by(blocking, condition) %>%
+    dplyr::summarize(sd_tot = sd(mean_id, na.rm = T))%>%
+    print()
+  # sd of difference
+  df_outcomes %>%
+    dplyr::group_by(blocking, pilot, id, condition) %>%
+    dplyr::summarize(mean_id = mean(temp, na.rm = T)) %>%
+    dplyr::group_by(blocking, pilot, id) %>%
+    dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
+    dplyr::group_by(blocking) %>%
+    dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
+    print()
 }
 
 
 # Reaction Time ----
 plot_clean_outcomes(1:10, "good_rt", "reaction time")
 plot_clean_outcomes(11:20, "good_rt", "reaction time")
-plot_clean_outcomes(21:33, "good_rt", "reaction time", T)
+plot_clean_outcomes(21:33, "good_rt", "reaction time")
+sum_clean_outcomes("good_rt")
 
 
 # Response Time ----
 plot_clean_outcomes(1:10, "good_response_time", "response time")
 plot_clean_outcomes(11:20, "good_response_time", "response time")
-plot_clean_outcomes(21:33, "good_response_time", "response time", T)
+plot_clean_outcomes(21:33, "good_response_time", "response time")
+sum_clean_outcomes("good_response_time")
 
 
 # Movement Time ----
 plot_clean_outcomes(1:10, "good_movement_time", "movement time")
 plot_clean_outcomes(11:20, "good_movement_time", "movement time")
-plot_clean_outcomes(21:33, "good_movement_time", "movement time", T)
+plot_clean_outcomes(21:33, "good_movement_time", "movement time")
+sum_clean_outcomes("good_movement_time")
 
 
 # Movement Error ----
@@ -1596,21 +1647,100 @@ plot_clean_error(1:10)
 plot_clean_error(11:20)
 plot_clean_error(21:33)
 
-# look at error 
+
+# Absolute (2D) Error ----
+# at fixation
+sum_clean_outcomes("fix_error")
+
+# at target
+sum_clean_outcomes("target_error")
+
+
+# Amplitude Errors ----
+# both Constant (first) and Variable Errors (second) are Shown
+sum_clean_outcomes("CE_amp")
+
+
+# Directional Errors ----
+# both Constant (first) and Variable Errors (second) are Shown
+sum_clean_outcomes("CE_dir")
+
+
+
+#### GENERAL NOTE: more variability of outcome DVs in 'vision first' blocking condition ####
+
+
+
+########################################################
+####           rANOVAs Outcomes                     ####
+########################################################
+
+library(ez)
+
 df_outcomes %>%
-  group_by(pilot, id, condition) %>%
-  dplyr::summarize(mean_id_target_error = mean(target_error, na.rm = T)) %>%
-  group_by(condition) %>%
-  dplyr::summarize(mean_target_error = mean(mean_id_target_error, na.rm = T)) 
-df_outcomes %>%
-  group_by(pilot, id, condition) %>%
-  dplyr::summarize(mean_id_target_error = mean(target_error, na.rm = T)) %>%
-  group_by(condition) %>%
-  dplyr::summarize(sd_target_error = sd(mean_id_target_error, na.rm = T)) 
-df_outcomes %>%
-  dplyr::group_by(pilot, id, condition) %>%
-  dplyr::summarize(mean_id = mean(target_error, na.rm = T)) %>%
-  dplyr::group_by(pilot, id) %>%
-  dplyr::summarize(diff_id = diff(mean_id), na.rm = T) %>%
-  dplyr::summarize(sd_effect = sd(diff_id, na.rm = T))%>%
-  print()
+  dplyr::group_by(blocking, pilot, id, condition) %>%
+  dplyr::summarise(
+    good_movement_time = mean(good_movement_time)
+    , good_response_time = mean(good_response_time)
+    , good_rt = mean(good_rt)
+    , fix_error = mean(fix_error)
+    , target_error = mean(target_error)
+    , VE_amp = sd(CE_amp)
+    , CE_amp = mean(CE_amp)
+    , VE_dir = sd(CE_dir)
+    , CE_dir = mean(CE_dir)
+  ) -> df_outcomes_avg
+
+# create function to fun ANOVAs and summarize data
+do_anovas = function(dv) {
+  df_outcomes_avg$temp = dplyr::pull(df_outcomes_avg, dv)
+  ez_print = ezANOVA(
+    df_outcomes_avg
+    , dv = temp
+    , wid = id
+    , within = condition
+    , between = blocking
+  )
+  print(ez_print)
+  ezPlot(
+    df_outcomes_avg
+    , dv = temp
+    , wid = id
+    , within = condition
+    , between = blocking
+    , x = condition
+    , split = blocking
+    , do_bar = F
+  )
+}
+
+# RT ----
+do_anovas("good_rt")
+
+
+# MT ----
+do_anovas("good_movement_time")
+
+
+# Response Time ----
+do_anovas("good_response_time")
+
+
+# Absolute (2D) Error ----
+do_anovas("target_error")
+
+
+# Constant Error (Amplitude) ----
+do_anovas("CE_amp")
+
+
+# Constant Error (Direction) ----
+do_anovas("CE_dir")
+
+
+# Variable Error (Amplitude) ----
+do_anovas("VE_amp")
+
+
+# Variable Error (Direction) ----
+do_anovas("VE_dir")
