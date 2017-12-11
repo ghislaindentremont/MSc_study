@@ -4,6 +4,7 @@ library(forecast)
 library(signal)
 library(zoo)
 library(imputeTS)
+library(ez)
 
 setwd("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/touch_screen")
 
@@ -620,7 +621,7 @@ df$bad_chunk = ifelse(is.na(df$bad_chunk), 0, df$bad_chunk)
 df$bad_chunk2 = df$isna_ma2 == 1
 df$bad_chunk2 = ifelse(is.na(df$bad_chunk2), 0, df$bad_chunk2)
 
-# identify the trials in which the 
+# identify the trials in which there are bad chunks
 df %>%
   dplyr::group_by(pilot, id, condition, trial) %>%
   dplyr::mutate(
@@ -870,8 +871,9 @@ df_long %>% dplyr::filter(time > edge_start, time < edge_end) -> df_long_noedge
 # what are the cutoffs for trial start and end?
 # start_line in mm
 start_line = 10
+end_line = 270
 
-plot_bounds = function(ids_use, dv, y_label, start_line) {
+plot_bounds = function(ids_use, dv, y_label, start_line, end_line) {
   
   df_long_noedge %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
@@ -880,14 +882,15 @@ plot_bounds = function(ids_use, dv, y_label, start_line) {
     xlab("time (s)")+
     ylab(y_label)+
     geom_hline(yintercept = start_line, color = "red")+
+    geom_hline(yintercept = end_line, color = "red")+
     facet_grid(condition~id) %>% print()
 }
 
 # Y
-plot_bounds(1:10, "y_inter", "y position (mm)", start_line)
-plot_bounds(11:20, "y_inter", "y position (mm)", start_line)
-plot_bounds(21:33, "y_inter", "y position (mm)", start_line)
-plot_bounds(30, "y_inter", "bad y position (mm)", start_line)
+plot_bounds(1:10, "y_inter", "y position (mm)", start_line, end_line)
+plot_bounds(11:20, "y_inter", "y position (mm)", start_line, end_line)
+plot_bounds(21:33, "y_inter", "y position (mm)", start_line, end_line)
+plot_bounds(30, "y_inter", "bad y position (mm)", start_line, end_line)
 
 
 # Derivatives ----
@@ -960,6 +963,7 @@ df_long_clean %>%
   spread(coordinate, centered_position) %>%
   dplyr::mutate(
     moved = y_inter > start_line
+    , stopped = y_inter > end_line
   ) %>%
   gather(coordinate, centered_position, x_inter:z_inter, factor_key = T) %>%
   dplyr::arrange(pilot, id, condition, trial, coordinate, time) -> df_long_moved  # the arrange function is necessary for lining up both data frames
@@ -973,7 +977,7 @@ mean(df_long_moved$time == df_long_clean$time)
 # add to data frame
 df_long_moved %>%
   ungroup() %>%
-  dplyr::select(moved) %>%
+  dplyr::select(moved, stopped) %>%
   bind_cols(df_long_clean) -> df_long_clean
 # get rid of velocity sub-df
 rm(df_long_moved)
@@ -1016,7 +1020,7 @@ ma_length_end_ms = ma_length_end * 1000/200
 # we ignore seperations among ids, coordinates, and trials for efficiency
 # the following processing should make it so that this does not effect trial starts and ends
 df_long_clean$potential_start = as.numeric(ma(df_long_clean$non_stationary & df_long_clean$moved, ma_length_start))  
-df_long_clean$potential_end = as.numeric(ma(df_long_clean$stationary, ma_length_end)) 
+df_long_clean$potential_end = as.numeric(ma(df_long_clean$stationary & df_long_clean$stopped, ma_length_end)) 
 
 # I actually think this is faster than just using mutate
 df_long_clean$trial_start_bool = df_long_clean$potential_start == 1
@@ -1044,7 +1048,44 @@ df_long_clean %>%
     , trial_end = sort(unique(trial_end_frame))[2] + (ma_length_end-1)/2  + buffer_end  # we pick the second lowest because there are many -1s
   ) -> df_long_clean
 
+# identify trials that do not contain trial start or trial end
 df_long_clean %>%
+  dplyr::filter(coordinate == "y_inter") %>%
+  dplyr::group_by(pilot, id, condition, trial) %>%
+  dplyr::summarise(
+    bad_start = is.na(unique(trial_start))
+    , bad_end = is.na(unique(trial_end))
+  ) %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarise(
+    bad_starts = sum(bad_start)
+    , bad_ends = sum(bad_end)
+  ) %>% print(n=n*2)
+
+# identify trials that don't have proper start and end cutoffs
+df_long_clean %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::mutate(
+    bad_start = is.na(unique(trial_start))
+    , bad_end = is.na(unique(trial_end))
+  ) -> df_long_clean
+
+# get rif of bad trials
+df_long_clean %>%
+  dplyr::filter(
+    bad_start == F
+    , bad_end == F
+  ) -> df_long_cleaner
+
+# count trials per participant and per condition
+df_long_cleaner %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarize(count = length(unique(trial))) %>%
+  print(n=n*2) %>%  # notice that participant 30 has 
+  dplyr::filter(count < 10) # make sure all conditions have at least 10 trials
+
+# trim data set
+df_long_cleaner %>%
   dplyr::filter(
     frame >= trial_start
     , frame <= trial_end
@@ -1087,9 +1128,8 @@ plot_trim(21:33, "x_inter", "x position (mm)")
 plot_trim(1:10, "y_inter", "y position (mm)")
 plot_trim(11:20, "y_inter", "y position (mm)")
 plot_trim(21:33, "y_inter", "y position (mm)")
-# this participant has one particularly bad start time
-# a few other participants have bad stop times 
-plot_trim(18, "y_inter", "bad y position (mm)")
+# there are a few outlying trials - the graph below shows one of these
+plot_trim(13, "y_inter", "bad y position (mm)")
 # Z
 plot_trim(1:10, "z_inter", "z position (mm)")
 plot_trim(11:20, "z_inter", "z position (mm)")
@@ -1170,15 +1210,19 @@ round0 = function(x,z){
   round(x/z,0)*z
 }
 
+# what is the resolution?
+norm_size = 0.05
+
+# normalize time
 df_long_trim %>%
   dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::mutate(
-    norm_time = round0((zero_time-min(zero_time))/(max(zero_time)-min(zero_time)), 0.05)
+    norm_time = round0((zero_time-min(zero_time))/(max(zero_time)-min(zero_time)), norm_size)
     ) -> df_long_norm2
 
 df_long_norm2 %>%
-  dplyr::group_by(pilot, id, condition, trial, coordinate, norm_time) %>%
-  dplyr::mutate(
+  dplyr::group_by(blocking, pilot, id, condition, trial, coordinate, norm_time) %>%
+  dplyr::summarize(
     norm_position = mean(centered_position) 
     , norm_velocity = mean(velocity)
     , norm_acceleration = mean(acceleration)
@@ -1186,12 +1230,34 @@ df_long_norm2 %>%
 
 
 # Normalized Trials ----
+# get peak acceleration and decceleration values for each participant 
+df_long_norm %>%
+  dplyr::group_by(blocking, pilot, id, condition, coordinate, trial) %>%
+  dplyr::summarize(
+    time_peak_velocity = norm_time[which(norm_velocity == max(norm_velocity))]
+    , time_peak_acceleration = norm_time[which(norm_acceleration == max(norm_acceleration))]
+    , time_peak_deceleration = norm_time[which(norm_acceleration == min(norm_acceleration))]
+    , peak_velocity = max(norm_velocity)
+    , peak_acceleration = max(norm_acceleration)
+    , peak_deceleration = min(norm_acceleration)
+  ) -> kms
+
 plot_norm = function(ids_use, dv, dev, y_label) {
   df_long_norm$tempy = dplyr::pull(df_long_norm, dev)
+  rang = range(df_long_norm$tempy[df_long_norm$coordinate == dv])
+  data_range = rang[2] - rang[1]
+  bottom = rang[1]
+  top = rang[2]
+  
+  kin_dat = kms[kms$coordinate == dv & (as.numeric(kms$id) %in% ids_use),]
+  
   df_long_norm %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
     geom_line(aes(x=norm_time, y=tempy, group=trial, color=trial), alpha = 0.5, size = .2)+
+    geom_point(data = kin_dat, aes(x=time_peak_velocity, y=top + data_range/10, group=trial, color=trial), alpha = 0.5, size = 0.2)+
+    geom_point(data = kin_dat, aes(x=time_peak_acceleration, y=top, group=trial, color=trial), alpha = 0.5, size = 0.2)+
+    geom_point(data = kin_dat, aes(x=time_peak_deceleration, y=bottom, group=trial, color=trial), alpha = 0.5, size = 0.2)+
     xlab("normalized time")+
     ylab(y_label)+
     facet_grid(id~condition) %>% print()
@@ -1221,14 +1287,18 @@ df_long_norm %>%
     , acceleration_avg = mean(norm_acceleration)
   ) -> df_long_norm_avg
 
-# get peak acceleration and decceleration values for each participant 
-df_long_norm_avg %>%
+# average over peak times 
+kms %>%
   dplyr::group_by(blocking, pilot, id, condition, coordinate) %>%
-  dplyr::summarize(
-    peak_velocity = norm_time[which(velocity_avg == max(velocity_avg))]
-    , peak_acceleration = norm_time[which(acceleration_avg == max(acceleration_avg))]
-    , peak_deceleration = norm_time[which(acceleration_avg == min(acceleration_avg))]
-  ) -> kms
+  dplyr::summarise(
+    time_peak_velocity = mean(time_peak_velocity)
+    , time_peak_acceleration = mean(time_peak_acceleration)
+    , time_peak_deceleration = mean(time_peak_deceleration)
+    , peak_velocity = mean(peak_velocity)
+    , peak_acceleration = mean(peak_acceleration)
+    , peak_deceleration = mean(peak_deceleration)
+  ) -> kms_ids
+
 
 # create function
 plot_norm_avg = function(ids_use, dv, dev, y_label) {
@@ -1238,15 +1308,15 @@ plot_norm_avg = function(ids_use, dv, dev, y_label) {
   bottom = rang[1]
   top = rang[2]
   
-  kin_dat = kms[kms$coordinate == dv & (as.numeric(kms$id) %in% ids_use),]
+  kin_dat = kms_ids[kms_ids$coordinate == dv & (as.numeric(kms_ids$id) %in% ids_use),]
   
   df_long_norm_avg %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
     geom_line(aes(x=norm_time, y=tempy, group=id, color=id), size = .3)+
-    geom_point(data = kin_dat, aes(x=peak_velocity, y=top + data_range/50, group=id, color=id), size = 1)+
-    geom_point(data = kin_dat, aes(x=peak_acceleration, y=top, group=id, color=id), size = 1)+
-    geom_point(data = kin_dat, aes(x=peak_deceleration, y=bottom, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_velocity, y=top + data_range/50, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_acceleration, y=top, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_deceleration, y=bottom, group=id, color=id), size = 1)+
     xlab("normalized time")+
     ylab(y_label)+
     facet_grid(.~condition) %>% print()
@@ -1276,24 +1346,17 @@ df_long_norm_avg %>%
   ) -> df_long_norm_grand_avg
 
 # get average kinematic markers for each group
-kms %>%
+kms_ids %>%
   dplyr::group_by(blocking, condition, coordinate) %>%
   dplyr::summarise(
-    peak_velocity_avg = mean(peak_velocity) 
-    , peak_acceleration_avg = mean(peak_acceleration)
-    , peak_deceleration_avg =  mean(peak_deceleration)
+    time_peak_velocity= mean(time_peak_velocity) 
+    , time_peak_acceleration = mean(time_peak_acceleration)
+    , time_peak_deceleration =  mean(time_peak_deceleration)
+    , peak_velocity= mean(peak_velocity) 
+    , peak_acceleration = mean(peak_acceleration)
+    , peak_deceleration =  mean(peak_deceleration)
   ) -> kms_avg
 kms_avg
-
-# get kinematic markers of each avrage
-df_long_norm_grand_avg %>%
-  dplyr::group_by(blocking, condition, coordinate) %>%
-  dplyr::summarize(
-    grand_peak_velocity = norm_time[which(velocity_grand_avg == max(velocity_grand_avg))]
-    , grand_peak_acceleration = norm_time[which(acceleration_grand_avg == max(acceleration_grand_avg))]
-    , grand_peak_deceleration = norm_time[which(acceleration_grand_avg == min(acceleration_grand_avg))]
-  ) -> grand_kms
-grand_kms
   
 
 # function
@@ -1304,15 +1367,15 @@ plot_norm_grand_avg = function(dv, dev, y_label) {
   bottom = rang[1]
   top = rang[2]
   
-  kin_dat_avg = kms_avg[kms_avg$coordinate == dv,]
+  kin_dat = kms_avg[kms_avg$coordinate == dv,]
   
   df_long_norm_grand_avg %>%
     dplyr::filter(coordinate == dv) %>%
     ggplot(aes(x=norm_time, y=tempy, group=condition, color=condition))+
     geom_line()+
-    geom_point(data = kin_dat_avg, aes(x=peak_velocity_avg, y=top+data_range/50, group=condition, color=condition), size = 1)+
-    geom_point(data = kin_dat_avg, aes(x=peak_acceleration_avg, y=top, group=condition, color=condition), size = 1)+
-    geom_point(data = kin_dat_avg, aes(x=peak_deceleration_avg, y=bottom, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_velocity, y=top+data_range/50, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_acceleration, y=top, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_deceleration, y=bottom, group=condition, color=condition), size = 1)+
     facet_grid(.~blocking)+
     xlab("normalized time")+
     ylab(y_label) %>% print()
@@ -1424,7 +1487,7 @@ plot_norm_grand_avg("z_inter", "acceleration_grand_avg", "z acceleration (mm/s^2
 ##########################################################
 
 df_long_norm %>%
-  dplyr::group_by(pilot, id, condition, coordinate, norm_time) %>%
+  dplyr::group_by(blocking, pilot, id, condition, coordinate, norm_time) %>%
   dplyr::summarise(spat_var = sd(norm_position)) -> df_long_spat_var
 
 # function to plot spatial variability
@@ -1435,15 +1498,15 @@ plot_spat_var = function(ids_use, dv, y_label) {
   bottom = rang[1]
   top = rang[2]
   
-  kin_dat = kms[kms$coordinate == dv & (as.numeric(kms$id) %in% ids_use),]
+  kin_dat = kms_ids[kms_ids$coordinate == dv & (as.numeric(kms_ids$id) %in% ids_use),]
   
   df_long_spat_var %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
     geom_line(aes(x=norm_time, y=spat_var, group=id, color=id), alpha = 0.5, size = .5)+
-    geom_point(data = kin_dat, aes(x=peak_velocity, y=top + data_range/50, group=id, color=id), size = 1)+
-    geom_point(data = kin_dat, aes(x=peak_acceleration, y=top, group=id, color=id), size = 1)+
-    geom_point(data = kin_dat, aes(x=peak_deceleration, y=bottom, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_velocity, y=top + data_range/50, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_acceleration, y=top, group=id, color=id), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_deceleration, y=bottom, group=id, color=id), size = 1)+
     xlab("normalized time")+
     ylab(y_label)+
     facet_grid(.~condition) %>% print()
@@ -1465,31 +1528,12 @@ plot_spat_var(21:33, "z_inter", "z spatial variability (sd)")
 
 # Average of Spatial Variabilty Profiles ----
 df_long_spat_var %>%
-  dplyr::group_by(condition, coordinate, norm_time) %>%
+  dplyr::group_by(blocking, condition, coordinate, norm_time) %>%
   dplyr::summarise(spat_var_avg = mean(spat_var)) -> df_long_spat_var_avg  
 
 # NOTE: outlying trials/participants are affecting results
 # difference between mean and median averages
 
-# get average kinematic markers for each group
-kms %>%
-  dplyr::group_by(condition, coordinate) %>%
-  dplyr::summarise(
-    peak_velocity_avg = mean(peak_velocity) 
-    , peak_acceleration_avg = mean(peak_acceleration)
-    , peak_deceleration_avg =  mean(peak_deceleration)
-  ) -> spat_kms_avg
-spat_kms_avg
-
-# get kinematic markers of each avrage
-df_long_norm_grand_avg %>%
-  dplyr::group_by(condition, coordinate) %>%
-  dplyr::summarize(
-    grand_peak_velocity = norm_time[which(velocity_grand_avg == max(velocity_grand_avg))]
-    , grand_peak_acceleration = norm_time[which(acceleration_grand_avg == max(acceleration_grand_avg))]
-    , grand_peak_deceleration = norm_time[which(acceleration_grand_avg == min(acceleration_grand_avg))]
-  ) -> spat_grand_kms
-spat_grand_kms
 
 # a function to plot group spatial variability profiles
 plot_spat_var_avg = function(dv, y_label) {
@@ -1499,16 +1543,17 @@ plot_spat_var_avg = function(dv, y_label) {
   bottom = rang[1]
   top = rang[2]
   
-  kin_dat_avg = spat_kms_avg[spat_kms_avg$coordinate == dv,]
+  kin_dat = kms_avg[kms_avg$coordinate == dv,]
   
   df_long_spat_var_avg %>%
     dplyr::filter(coordinate == dv) %>%
     ggplot()+
     geom_line(aes(x=norm_time, y=spat_var_avg, group=condition, color=condition))+
-    geom_point(data = kin_dat_avg, aes(x=peak_velocity_avg, y=top + data_range/50, group=condition, color=condition), size = 1)+
-    geom_point(data = kin_dat_avg, aes(x=peak_acceleration_avg, y=top, group=condition, color=condition), size = 1)+
-    geom_point(data = kin_dat_avg, aes(x=peak_deceleration_avg, y=bottom, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_velocity, y=top + data_range/50, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_acceleration, y=top, group=condition, color=condition), size = 1)+
+    geom_point(data = kin_dat, aes(x=time_peak_deceleration, y=bottom, group=condition, color=condition), size = 1)+
     xlab("normalized time")+
+    facet_grid(.~blocking)+
     ylab(y_label) %>% print()
 }
 
@@ -1553,7 +1598,7 @@ df_outcomes %>%
   dplyr::summarise(
     count = length(unique(trial))
   ) %>% print(n=n*2) -> reduced
-# compare to non-reduce data frame
+# compare to non-reduced data frame
 df_long_norm %>%
   dplyr::group_by(id, condition) %>%
   dplyr::summarise(
@@ -1675,8 +1720,6 @@ sum_clean_outcomes("CE_dir")
 ####           rANOVAs Outcomes                     ####
 ########################################################
 
-library(ez)
-
 df_outcomes %>%
   dplyr::group_by(blocking, pilot, id, condition) %>%
   dplyr::summarise(
@@ -1744,3 +1787,210 @@ do_anovas("VE_amp")
 
 # Variable Error (Direction) ----
 do_anovas("VE_dir")
+
+
+
+
+########################################################
+####           rANOVAs Kinematics                   ####
+########################################################
+
+# TAPV ----
+df_ykinematics = subset(kms_ids, coordinate == "y_inter")
+df_ykinematics$time_after_peak_velocity = 1 - df_ykinematics$time_peak_velocity
+
+ezANOVA(
+  df_ykinematics
+  , dv = time_after_peak_velocity
+  , wid = id
+  , within = condition
+  , between = blocking
+)
+ezPlot(
+  df_ykinematics
+  , dv = time_after_peak_velocity
+  , wid = id
+  , within = condition
+  , between = blocking
+  , x = condition
+  , split = blocking
+  , do_bar = F
+)
+
+
+# Spatial Variability Profile ----
+df_spat_var = merge(df_long_spat_var, kms_ids)
+
+mround <- function(x,base){ 
+  base*round(x/base) 
+} 
+
+df_spat_var %>%
+  dplyr::mutate(
+   time_peak_velocity_round = mround(time_peak_velocity, 0.05)
+   , time_peak_acceleration_round = mround(time_peak_acceleration, 0.05)
+   , time_peak_deceleration_round = mround(time_peak_deceleration, 0.05)
+  ) -> df_spat_var
+
+df_spat_var %>%
+  dplyr::group_by(blocking, pilot, id, condition, coordinate) %>%
+  dplyr::summarize(
+   PV = spat_var[norm_time == time_peak_velocity_round]
+   , PA = spat_var[norm_time == time_peak_acceleration_round]
+   , PD = spat_var[norm_time == time_peak_deceleration_round]
+   , END = spat_var[norm_time == 1]
+  ) %>%
+  gather("kinematic_marker", "spatial_variability", PV:END) -> df_spat_var_anova
+
+# change factor order for plot
+df_spat_var_anova$kinematic_marker = factor(df_spat_var_anova$kinematic_marker, levels = c("PA", "PV", "PD", "END"))
+
+# Y
+df_yspat_var_anova = subset(df_spat_var_anova, coordinate == "y_inter")
+
+ezANOVA(
+  df_yspat_var_anova
+  , dv = spatial_variability
+  , wid = id
+  , within = .(condition, kinematic_marker)
+  # , between = blocking
+)
+ezPlot(
+  df_yspat_var_anova
+  , dv = spatial_variability
+  , wid = id
+  , within = .c(condition, kinematic_marker)
+  # , between = blocking
+  , x = kinematic_marker
+  , split = condition
+  , do_bar = F
+  , y_lab = "y spatial variability (sd)"
+  , x_lab = "kinematic marker"
+)
+
+# X
+df_xspat_var_anova = subset(df_spat_var_anova, coordinate == "x_inter")
+
+ezANOVA(
+  df_xspat_var_anova
+  , dv = spatial_variability
+  , wid = id
+  , within = .(condition, kinematic_marker)
+  # , between = blocking
+)
+ezPlot(
+  df_xspat_var_anova
+  , dv = spatial_variability
+  , wid = id
+  , within = .c(condition, kinematic_marker)
+  # , between = blocking
+  , x = kinematic_marker
+  , split = condition
+  , do_bar = F
+  , y_lab = "x spatial variability (sd)"
+  , x_lab = "kinematic marker"
+)
+
+
+# R^2 Analysis ---- 
+
+# merge kinematic markers with 
+df_rsq = merge(df_long_norm, kms)
+
+# create rounded time variables
+df_rsq %>%
+  dplyr::mutate(
+    time_peak_velocity_round = mround(time_peak_velocity, 0.05)
+    , time_peak_acceleration_round = mround(time_peak_acceleration, 0.05)
+    , time_peak_deceleration_round = mround(time_peak_deceleration, 0.05)
+  ) -> df_rsq
+
+df_rsq %>%
+  dplyr::group_by(blocking, pilot, id, condition, trial, coordinate) %>%
+  dplyr::summarize(
+    PV = norm_position[norm_time == time_peak_velocity_round]
+    , PA = norm_position[norm_time == time_peak_acceleration_round]
+    , PD = norm_position[norm_time == time_peak_deceleration_round]
+    , END = norm_position[norm_time == 1]
+  ) -> df_rsq_lm
+
+# for each participant and each condition extract R^2
+df_rsq_anova2 = ddply(
+  .data = df_rsq_lm
+  , .variables = .(blocking, pilot, id, condition, coordinate)
+  , .fun = function(x) {
+    m_PA = lm(END~PA, data=x)
+    m_PV = lm(END~PV, data=x)
+    m_PD = lm(END~PD, data=x)
+    
+    coor = unique(x$coordinate)
+    id = unique(x$id)
+    cond = unique(x$condition)
+    
+    plot(END~PA, data = x)
+    title(main = sprintf("%s %s %s", id, coor, cond))
+    plot(END~PV, data = x)
+    title(main = sprintf("%s %s %s", id, coor, cond))
+    plot(END~PD, data = x)
+    title(main = sprintf("%s %s %s", id, coor, cond))
+    
+    R_PA = summary(m_PA)$r.squared
+    R_PV = summary(m_PV)$r.squared
+    R_PD = summary(m_PD)$r.squared
+    
+    return(data.frame(PA = R_PA, PV = R_PV, PD = R_PD))
+  }
+)
+
+df_rsq_anova2 %>%
+  gather("kinematic_marker", "R_sq", PA:PD) -> df_rsq_anova
+
+df_rsq_anova$kinematic_marker = factor(df_rsq_anova$kinematic_marker, levels = c("PA", "PV", "PD"))
+
+# Y
+df_yrsq_anova = subset(df_rsq_anova, coordinate == "y_inter")
+
+# run anova on R^2 analysis
+ezANOVA(
+  df_yrsq_anova
+  , dv = R_sq
+  , wid = id
+  , within = .(condition, kinematic_marker)
+  # , between = blocking
+)
+ezPlot(
+  df_yrsq_anova
+  , dv = R_sq
+  , wid = id
+  , within = .c(condition, kinematic_marker)
+  # , between = blocking
+  , x = kinematic_marker
+  , split = condition
+  , do_bar = F
+  , y_lab = "y R^2"
+  , x_lab = "kinematic marker"
+)
+
+# X
+df_xrsq_anova = subset(df_rsq_anova, coordinate == "x_inter")
+
+# run anova on R^2 analysis
+ezANOVA(
+  df_xrsq_anova
+  , dv = R_sq
+  , wid = id
+  , within = .(condition, kinematic_marker)
+  # , between = blocking
+)
+ezPlot(
+  df_xrsq_anova
+  , dv = R_sq
+  , wid = id
+  , within = .c(condition, kinematic_marker)
+  # , between = blocking
+  , x = kinematic_marker
+  , split = condition
+  , do_bar = F
+  , y_lab = "x R^2"
+  , x_lab = "kinematic marker"
+)
