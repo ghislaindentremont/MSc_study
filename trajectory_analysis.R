@@ -870,7 +870,7 @@ df_long %>% dplyr::filter(time > edge_start, time < edge_end) -> df_long_noedge
 (ytargetcoor - yfixcoor)
 # what are the cutoffs for trial start and end?
 # start_line in mm
-start_line = 10
+start_line = 30
 end_line = 270
 
 plot_bounds = function(ids_use, dv, y_label, start_line, end_line) {
@@ -991,6 +991,7 @@ df_long_clean %>%
   dplyr::mutate(
     non_stationary = y_inter > velo_start
     , stationary = y_inter < velo_end
+    , greater_than_zero = y_inter > 0
   ) %>%
   gather(coordinate, velocity, x_inter:z_inter, factor_key = T) %>%
   dplyr::arrange(pilot, id, condition, trial, coordinate, time) -> df_long_velo # the arrange function is necessary for lining up both data frames
@@ -1003,7 +1004,7 @@ mean(df_long_velo$time == df_long_clean$time)
 
 df_long_velo %>%
   ungroup() %>%
-  dplyr::select(non_stationary, stationary) %>%
+  dplyr::select(non_stationary, stationary, greater_than_zero) %>%
   bind_cols(df_long_clean) -> df_long_clean
 # get rid of velocity sub-df
 rm(df_long_velo)
@@ -1022,23 +1023,32 @@ ma_length_end_ms = ma_length_end * 1000/200
 df_long_clean$potential_start = as.numeric(ma(df_long_clean$non_stationary & df_long_clean$moved, ma_length_start))  
 df_long_clean$potential_end = as.numeric(ma(df_long_clean$stationary & df_long_clean$stopped, ma_length_end)) 
 
+# if 1 then zero cross from negative to positive. If -1 then zero cross from positive to negative 
+df_long_clean$zero_cross = diff(c(0, df_long_clean$greater_than_zero)) 
+
+df_long_clean$real_trial_start_bool = df_long_clean$zero_cross == 1
+df_long_clean$real_trial_end_bool = df_long_clean$zero_cross == -1
+
+df_long_clean$real_trial_start_frame = df_long_clean$real_trial_start_bool * df_long_clean$frame
+df_long_clean$real_trial_end_frame = df_long_clean$real_trial_end_bool * df_long_clean$frame 
+
 # I actually think this is faster than just using mutate
 df_long_clean$trial_start_bool = df_long_clean$potential_start == 1
 df_long_clean$trial_end_bool = df_long_clean$potential_end == 1
 
 df_long_clean$trial_start_frame = df_long_clean$trial_start_bool * df_long_clean$frame 
-df_long_clean$trial_end_frame = df_long_clean$trial_end_bool * df_long_clean$frame 
+# df_long_clean$trial_end_frame = df_long_clean$trial_end_bool * df_long_clean$frame 
 
 # identify first positive change in 'potential end'
 df_long_clean$trial_end_diff = diff(c(0,df_long_clean$trial_end_bool))
 df_long_clean$trial_end_bool_2 = df_long_clean$trial_end_diff == 1
-df_long_clean$trial_end_frame = df_long_clean$trial_end_bool_2 * df_long_clean$frame - 1
+df_long_clean$trial_end_frame = df_long_clean$trial_end_bool_2 * df_long_clean$frame 
 
 # give some space 
-buffer_start = 5
+buffer_start = 0
 buffer_start_ms = buffer_start * 1000/200
 
-buffer_end = 5
+buffer_end = 0
 buffer_end_ms = buffer_end * 1000/200
 
 df_long_clean %>%
@@ -1048,13 +1058,25 @@ df_long_clean %>%
     , trial_end = sort(unique(trial_end_frame))[2] + (ma_length_end-1)/2  + buffer_end  # we pick the second lowest because there are many -1s
   ) -> df_long_clean
 
+# create difference vectors to find closest real ends and starts 
+df_long_clean$closest_real_start = df_long_clean$trial_start - df_long_clean$real_trial_start_frame
+df_long_clean$closest_real_end = df_long_clean$real_trial_end_frame - df_long_clean$trial_end 
+
+# roll back to velocity zero crossings 
+df_long_clean %>%
+  group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::mutate(
+    real_trial_start = trial_start - min(closest_real_start[which(closest_real_start > 0)])
+    , real_trial_end = trial_end + min(closest_real_end[which(closest_real_end > 0)])
+  ) -> df_long_clean
+
 # identify trials that do not contain trial start or trial end
 df_long_clean %>%
   dplyr::filter(coordinate == "y_inter") %>%
   dplyr::group_by(pilot, id, condition, trial) %>%
   dplyr::summarise(
-    bad_start = is.na(unique(trial_start))
-    , bad_end = is.na(unique(trial_end))
+    bad_start = is.na(unique(real_trial_start))
+    , bad_end = is.na(unique(real_trial_end))
   ) %>%
   dplyr::group_by(pilot, id, condition) %>%
   dplyr::summarise(
@@ -1066,11 +1088,11 @@ df_long_clean %>%
 df_long_clean %>%
   dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::mutate(
-    bad_start = is.na(unique(trial_start))
-    , bad_end = is.na(unique(trial_end))
+    bad_start = is.na(unique(real_trial_start))
+    , bad_end = is.na(unique(real_trial_end))
   ) -> df_long_clean
 
-# get rif of bad trials
+# get rid of bad trials
 df_long_clean %>%
   dplyr::filter(
     bad_start == F
@@ -1087,8 +1109,8 @@ df_long_cleaner %>%
 # trim data set
 df_long_cleaner %>%
   dplyr::filter(
-    frame >= trial_start
-    , frame <= trial_end
+    frame >= real_trial_start
+    , frame <= real_trial_end
   ) -> df_long_trim
 
 df_long_trim %>%
@@ -1101,16 +1123,18 @@ df_long_trim %>%
 
 
 ##########################################################
-####             Visualize Waveforms                  ####
+####             Trimmed Position                     ####
 ##########################################################
 
 # create function to plot trimmed data 
-plot_trim = function(ids_use, dv, y_label) {
+plot_trim = function(ids_use, dv, dev, y_label) {
+  
+  df_long_trim$tempy = dplyr::pull(df_long_trim, dev)
   
   df_long_trim %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=zero_time, y=centered_position, group=trial, color=trial), alpha = 0.5, size = .2)+
+    geom_line(aes(x=zero_time, y=tempy, group=trial, color=trial), alpha = 0.5, size = .2)+
     xlab("time (ms)")+
     ylab(y_label)+
     facet_grid(id~condition) %>% print()
@@ -1121,19 +1145,17 @@ plot_trim = function(ids_use, dv, y_label) {
 
 
 # X
-plot_trim(1:10, "x_inter", "x position (mm)")
-plot_trim(11:20, "x_inter", "x position (mm)")
-plot_trim(21:33, "x_inter", "x position (mm)")
+plot_trim(1:10, "x_inter", "centered_position", "x position (mm)")
+plot_trim(11:20, "x_inter", "centered_position", "x position (mm)")
+plot_trim(21:33, "x_inter", "centered_position", "x position (mm)")
 # Y
-plot_trim(1:10, "y_inter", "y position (mm)")
-plot_trim(11:20, "y_inter", "y position (mm)")
-plot_trim(21:33, "y_inter", "y position (mm)")
-# there are a few outlying trials - the graph below shows one of these
-plot_trim(13, "y_inter", "bad y position (mm)")
+plot_trim(1:10, "y_inter", "centered_position", "y position (mm)")
+plot_trim(11:20, "y_inter", "centered_position", "y position (mm)")
+plot_trim(21:33, "y_inter", "centered_position", "y position (mm)")
 # Z
-plot_trim(1:10, "z_inter", "z position (mm)")
-plot_trim(11:20, "z_inter", "z position (mm)")
-plot_trim(21:33, "z_inter", "z position (mm)")
+plot_trim(1:10, "z_inter", "centered_position", "z position (mm)")
+plot_trim(11:20, "z_inter", "centered_position", "z position (mm)")
+plot_trim(21:33, "z_inter", "centered_position", "z position (mm)")
 
 
 
@@ -1142,31 +1164,35 @@ df_long_trim %>%
   group_by(pilot, id, condition, coordinate, zero_time) %>%
   dplyr::summarise(
     position_avg = mean(centered_position) 
+    , velocity_avg = mean(velocity) 
+    , acceleration_avg = mean(acceleration) 
   ) -> df_long_trim_avg
 
-plot_trim_avg = function(ids_use, dv) {
+plot_trim_avg = function(ids_use, dv, dev, y_label) {
+  
+  df_long_trim_avg$tempy = dplyr::pull(df_long_trim_avg, dev)
   
   df_long_trim_avg %>%
     dplyr::filter(coordinate == dv, as.numeric(id) %in% ids_use) %>%
     ggplot()+
-    geom_line(aes(x=zero_time, y=position_avg, group=id, color=id), alpha = 0.5, size = .5)+
+    geom_line(aes(x=zero_time, y=tempy, group=id, color=id), alpha = 0.5, size = .5)+
     xlab("time (ms)")+
-    ylab(sprintf("%s average position (mm)", dv))+
+    ylab(y_label)+
     facet_grid(condition~.) %>% print()
 }
 
 # X
-plot_trim_avg(1:10, "x_inter")
-plot_trim_avg(11:20, "x_inter")
-plot_trim_avg(21:33, "x_inter")
+plot_trim_avg(1:10, "x_inter", "position_avg", "x position (mm)")
+plot_trim_avg(11:20, "x_inter", "position_avg", "x position (mm)")
+plot_trim_avg(21:33, "x_inter", "position_avg", "x position (mm)")
 # Y
-plot_trim_avg(1:10, "y_inter")
-plot_trim_avg(11:20, "y_inter")
-plot_trim_avg(21:33, "y_inter")
+plot_trim_avg(1:10, "y_inter", "position_avg", "y position (mm)")
+plot_trim_avg(11:20, "y_inter", "position_avg", "y position (mm)")
+plot_trim_avg(21:33, "y_inter", "position_avg", "y position (mm)")
 # Z
-plot_trim_avg(1:10, "z_inter")
-plot_trim_avg(11:20, "z_inter")
-plot_trim_avg(21:33, "z_inter")
+plot_trim_avg(1:10, "z_inter", "position_avg", "z position (mm)")
+plot_trim_avg(11:20, "z_inter", "position_avg", "z position (mm)")
+plot_trim_avg(21:33, "z_inter", "position_avg", "z position (mm)")
 
 
 
@@ -1175,28 +1201,121 @@ df_long_trim_avg %>%
   group_by(condition, coordinate, zero_time) %>%
   dplyr::summarise(
     position_grand_avg = mean(position_avg) 
+    , velocity_grand_avg = mean(velocity_avg)
+    , acceleration_grand_avg = mean(acceleration_avg)
   ) -> df_long_trim_grand_avg
 
 # function
-plot_trim_grand_avg = function(dv) {
+plot_trim_grand_avg = function(dv, dev, y_label) {
+  
+  df_long_trim_grand_avg$tempy = dplyr::pull(df_long_trim_grand_avg, dev)
   
   df_long_trim_grand_avg %>%
     dplyr::filter(coordinate == dv) %>%
     ggplot()+
-    geom_line(aes(x=zero_time, y=position_grand_avg))+
+    geom_line(aes(x=zero_time, y=tempy))+
     xlab("time (ms)")+
-    ylab(sprintf("%s grand average position", dv))+
+    ylab(y_label)+
     facet_grid(.~condition) %>% print()
 }
 
 # X
-plot_trim_grand_avg("x_inter")
+plot_trim_grand_avg("x_inter", "position_grand_avg", "x position (mm)")
 # Y
-plot_trim_grand_avg("y_inter")
+plot_trim_grand_avg("y_inter", "position_grand_avg", "y position (mm)")
 # Z
-plot_trim_grand_avg("z_inter")
+plot_trim_grand_avg("z_inter", "position_grand_avg", "z position (mm)")
 
 
+
+##########################################################
+####             Trimmed Velocity                     ####
+##########################################################
+
+# Trial-wise ----
+# X
+plot_trim(1:10, "x_inter", "velocity", "x velocity (mm/s)")
+plot_trim(11:20, "x_inter", "velocity", "x velocity (mm/s)")
+plot_trim(21:33, "x_inter", "velocity", "x velocity (mm/s)")
+# Y
+plot_trim(1:10, "y_inter", "velocity", "y velocity (mm/s)")
+plot_trim(11:20, "y_inter", "velocity", "y velocity (mm/s)")
+plot_trim(21:33, "y_inter", "velocity", "y velocity (mm/s)")
+# individual participants with delays
+plot_trim(1, "y_inter", "velocity", "y velocity (mm/s)")
+plot_trim(30, "y_inter", "velocity", "y velocity (mm/s)")
+# Z
+plot_trim(1:10, "z_inter", "velocity", "z velocity (mm/s)")
+plot_trim(11:20, "z_inter", "velocity", "z velocity (mm/s)")
+plot_trim(21:33, "z_inter", "velocity", "z velocity (mm/s)")
+
+
+# Participant ----
+# X
+plot_trim_avg(1:10, "x_inter", "velocity_avg", "x velocity (mm/s)")
+plot_trim_avg(11:20, "x_inter", "velocity_avg", "x velocity (mm/s)")
+plot_trim_avg(21:33, "x_inter", "velocity_avg", "x velocity (mm/s)")
+# Y
+plot_trim_avg(1:10, "y_inter", "velocity_avg", "y velocity (mm/s)")
+plot_trim_avg(11:20, "y_inter", "velocity_avg", "y velocity (mm/s)")
+plot_trim_avg(21:33, "y_inter", "velocity_avg", "y velocity (mm/s)")
+# Z
+plot_trim_avg(1:10, "z_inter", "velocity_avg", "z velocity (mm/s)")
+plot_trim_avg(11:20, "z_inter", "velocity_avg", "z velocity (mm/s)")
+plot_trim_avg(21:33, "z_inter", "velocity_avg", "z velocity (mm/s)")
+
+
+# Group Averages ----
+# X
+plot_trim_grand_avg("x_inter", "velocity_grand_avg", "x velocity (mm/s)")
+# Y
+plot_trim_grand_avg("y_inter", "velocity_grand_avg", "y velocity (mm/s)")
+# Z
+plot_trim_grand_avg("z_inter", "velocity_grand_avg", "z velocity (mm/s)")
+
+
+
+##########################################################
+####             Trimmed Acceleration                 ####
+##########################################################
+
+# Trial-wise ----
+# X
+plot_trim(1:10, "x_inter", "acceleration", "x acceleration (mm/s^2)")
+plot_trim(11:20, "x_inter", "acceleration", "x acceleration (mm/s^2)")
+plot_trim(21:33, "x_inter", "acceleration", "x acceleration (mm/s^2)")
+# Y
+plot_trim(1:10, "y_inter", "acceleration", "y acceleration (mm/s^2)")
+plot_trim(11:20, "y_inter", "acceleration", "y acceleration (mm/s^2)")
+plot_trim(21:33, "y_inter", "acceleration", "y acceleration (mm/s^2)")
+# Z
+plot_trim(1:10, "z_inter", "acceleration", "z acceleration (mm/s^2)")
+plot_trim(11:20, "z_inter", "acceleration", "z acceleration (mm/s^2)")
+plot_trim(21:33, "z_inter", "acceleration", "z acceleration (mm/s^2)")
+
+
+# Participant ----
+# X
+plot_trim_avg(1:10, "x_inter", "acceleration_avg", "x acceleration (mm/s^2)")
+plot_trim_avg(11:20, "x_inter", "acceleration_avg", "x acceleration (mm/s^2)")
+plot_trim_avg(21:33, "x_inter", "acceleration_avg", "x acceleration (mm/s^2)")
+# Y
+plot_trim_avg(1:10, "y_inter", "acceleration_avg", "y acceleration (mm/s^2)")
+plot_trim_avg(11:20, "y_inter", "acceleration_avg", "y acceleration (mm/s^2)")
+plot_trim_avg(21:33, "y_inter", "acceleration_avg", "y acceleration (mm/s^2)")
+# Z
+plot_trim_avg(1:10, "z_inter", "acceleration_avg", "z acceleration (mm/s^2)")
+plot_trim_avg(11:20, "z_inter", "acceleration_avg", "z acceleration (mm/s^2)")
+plot_trim_avg(21:33, "z_inter", "acceleration_avg", "z acceleration (mm/s^2)")
+
+
+# Group Averages ----
+# X
+plot_trim_grand_avg("x_inter", "acceleration_grand_avg", "x acceleration (mm/s^2)")
+# Y
+plot_trim_grand_avg("y_inter", "acceleration_grand_avg", "y acceleration (mm/s^2)")
+# Z
+plot_trim_grand_avg("z_inter", "acceleration_grand_avg", "z acceleration (mm/s^2)")
 
 
 
@@ -1226,6 +1345,18 @@ df_long_norm2 %>%
     norm_position = mean(centered_position) 
     , norm_velocity = mean(velocity)
     , norm_acceleration = mean(acceleration)
+    
+    , good_movement_time = unique(good_movement_time)
+    , good_response_time = unique(good_response_time)
+    , good_rt = unique(good_rt)
+    , fix_error = unique(fix_error)
+    , target_error = unique(target_error)
+    , CE_amp = unique(CE_amp)
+    , CE_dir = unique(CE_dir)
+    , good_xfix = unique(good_xfix)
+    , good_yfix = unique(good_yfix)
+    , good_xtarget = unique(good_xtarget)
+    , good_ytarget = unique(good_ytarget)
   ) -> df_long_norm
 
 
@@ -1581,6 +1712,10 @@ df_long_norm %>%
     , target_error = unique(target_error)
     , CE_amp = unique(CE_amp)
     , CE_dir = unique(CE_dir)
+    , good_xfix = unique(good_xfix)
+    , good_yfix = unique(good_yfix)
+    , good_xtarget = unique(good_xtarget)
+    , good_ytarget = unique(good_ytarget)
   ) -> df_outcomes
 
 # summarize cleaned outcome variable data
@@ -1757,6 +1892,7 @@ do_anovas = function(dv) {
   )
 }
 
+
 # RT ----
 do_anovas("good_rt")
 
@@ -1892,6 +2028,52 @@ ezPlot(
 )
 
 
+# Ellipsoid ----
+df_spat_var %>%
+  dplyr::select(blocking, pilot, id, condition, coordinate, norm_time, spat_var) %>%
+  spread(coordinate, spat_var) -> df_ellipsoid
+
+df_ellipsoid$volume = 4/3 * pi * df_ellipsoid$x_inter * df_ellipsoid$y_inter * df_ellipsoid$z_inter
+
+# function to plot ellipsoid volumes
+plot_ellipsoids = function(ids_use, y_label) {
+  df_ellipsoid %>%
+    dplyr::filter(as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=norm_time, y=volume, group=id, color=id), alpha = 0.5, size = .5)+
+    xlab("normalized time")+
+    ylab(y_label)+
+    facet_grid(.~condition) %>% print()
+}
+
+# use function
+plot_ellipsoids(1:10, "volume (mm^3)")
+plot_ellipsoids(11:21, "volume (mm^3)")
+plot_ellipsoids(21:30, "volume (mm^3)")
+
+# run ANOVAs
+ezANOVA(
+  df_ellipsoid
+  , dv = volume
+  , wid = id
+  , within = .(condition, norm_time)
+  # , between = blocking
+)
+ezPlot(
+  df_ellipsoid
+  , dv = volume
+  , wid = id
+  , within = .c(condition, norm_time)
+  # , between = blocking
+  , x =  norm_time
+  , split = condition
+  , do_bar = F
+  , y_lab = "volume (mm^3)"
+  , x_lab = "proportion of movement"
+)
+
+
+
 # R^2 Analysis ---- 
 
 # merge kinematic markers with 
@@ -1994,3 +2176,10 @@ ezPlot(
   , y_lab = "x R^2"
   , x_lab = "kinematic marker"
 )
+
+
+
+
+
+
+
