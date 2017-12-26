@@ -5,6 +5,9 @@ library(signal)
 library(zoo)
 library(imputeTS)
 library(ez)
+library(MASS)
+library(reshape2)
+library(rstan)
 
 setwd("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/touch_screen")
 
@@ -890,7 +893,7 @@ plot_bounds = function(ids_use, dv, y_label, start_line, end_line) {
 plot_bounds(1:10, "y_inter", "y position (mm)", start_line, end_line)
 plot_bounds(11:20, "y_inter", "y position (mm)", start_line, end_line)
 plot_bounds(21:33, "y_inter", "y position (mm)", start_line, end_line)
-plot_bounds(30, "y_inter", "bad y position (mm)", start_line, end_line)
+plot_bounds(5, "y_inter", "bad y position (mm)", start_line, end_line)
 
 
 # Derivatives ----
@@ -1152,6 +1155,7 @@ plot_trim(21:33, "x_inter", "centered_position", "x position (mm)")
 plot_trim(1:10, "y_inter", "centered_position", "y position (mm)")
 plot_trim(11:20, "y_inter", "centered_position", "y position (mm)")
 plot_trim(21:33, "y_inter", "centered_position", "y position (mm)")
+plot_trim(5, "y_inter", "centered_position", "y position (mm)")
 # Z
 plot_trim(1:10, "z_inter", "centered_position", "z position (mm)")
 plot_trim(11:20, "z_inter", "centered_position", "z position (mm)")
@@ -1928,10 +1932,9 @@ do_anovas("VE_dir")
 
 
 ########################################################
-####           rANOVAs Kinematics                   ####
+####                    TAPV                        ####
 ########################################################
 
-# TAPV ----
 df_ykinematics = subset(kms_ids, coordinate == "y_inter")
 df_ykinematics$time_after_peak_velocity = 1 - df_ykinematics$time_peak_velocity
 
@@ -1954,7 +1957,11 @@ ezPlot(
 )
 
 
-# Spatial Variability Profile ----
+
+########################################################
+####            Spatial Variability                 ####
+########################################################
+
 df_spat_var = merge(df_long_spat_var, kms_ids)
 
 mround <- function(x,base){ 
@@ -1981,7 +1988,7 @@ df_spat_var %>%
 # change factor order for plot
 df_spat_var_anova$kinematic_marker = factor(df_spat_var_anova$kinematic_marker, levels = c("PA", "PV", "PD", "END"))
 
-# Y
+# Y ----
 df_yspat_var_anova = subset(df_spat_var_anova, coordinate == "y_inter")
 
 ezANOVA(
@@ -2004,31 +2011,12 @@ ezPlot(
   , x_lab = "kinematic marker"
 )
 
-# X
-df_xspat_var_anova = subset(df_spat_var_anova, coordinate == "x_inter")
-
-ezANOVA(
-  df_xspat_var_anova
-  , dv = spatial_variability
-  , wid = id
-  , within = .(condition, kinematic_marker)
-  # , between = blocking
-)
-ezPlot(
-  df_xspat_var_anova
-  , dv = spatial_variability
-  , wid = id
-  , within = .c(condition, kinematic_marker)
-  # , between = blocking
-  , x = kinematic_marker
-  , split = condition
-  , do_bar = F
-  , y_lab = "x spatial variability (sd)"
-  , x_lab = "kinematic marker"
-)
 
 
-# Ellipsoid ----
+########################################################
+####               Ellipsoid                        ####
+########################################################
+
 df_spat_var %>%
   dplyr::select(blocking, pilot, id, condition, coordinate, norm_time, spat_var) %>%
   spread(coordinate, spat_var) -> df_ellipsoid
@@ -2074,7 +2062,9 @@ ezPlot(
 
 
 
-# R^2 Analysis ---- 
+########################################################
+####                   R^2                          ####
+########################################################
 
 # merge kinematic markers with 
 df_rsq = merge(df_long_norm, kms)
@@ -2129,7 +2119,8 @@ df_rsq_anova2 %>%
 
 df_rsq_anova$kinematic_marker = factor(df_rsq_anova$kinematic_marker, levels = c("PA", "PV", "PD"))
 
-# Y
+
+# Y ----
 df_yrsq_anova = subset(df_rsq_anova, coordinate == "y_inter")
 
 # run anova on R^2 analysis
@@ -2153,33 +2144,424 @@ ezPlot(
   , x_lab = "kinematic marker"
 )
 
-# X
-df_xrsq_anova = subset(df_rsq_anova, coordinate == "x_inter")
 
-# run anova on R^2 analysis
+
+########################################################
+####                Discontinuities                 ####
+########################################################
+
+# identify trials with negative velocities 
+df_long_norm$neg_velo = (df_long_norm$norm_velocity < 0) & (df_long_norm$norm_time != 1) # make sure end of movement is not captured
+
+# identify first trial that goes from positive to negative 
+df_long_norm %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::mutate(
+    neg_velo_diff = diff(c(1,neg_velo))
+    , neg_velo_bool = neg_velo_diff == 1 # difference of 1 should mean positive to negative  
+  ) -> df_long_norm
+
+# get time associated with correction start 
+df_long_norm$neg_velo_time = df_long_norm$neg_velo_bool * df_long_norm$norm_time
+
+# label trials
+df_long_norm %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::mutate(
+    neg_velo_trial = max(neg_velo)
+  ) -> df_long_norm
+
+# how many are there?
+df_long_norm %>%
+  dplyr::filter(coordinate == "y_inter") %>%
+  dplyr::group_by(pilot, id, condition, trial) %>%
+  dplyr::summarize(
+    neg_velo_trial = unique(neg_velo_trial)
+  ) %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarise(
+    count = sum(neg_velo_trial)
+  )
+  
+# identify when acceleration is negative 
+df_long_norm$neg_accel = df_long_norm$norm_acceleration < 0
+
+df_long_norm %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::mutate(
+    neg_accel_diff = diff(c(0,neg_accel)) # positive difference should mean positive to negative
+    # negative difference should mean negative to positive 
+    , neg_accel_bool = neg_accel_diff == -1
+  ) -> df_long_norm
+
+# get time associated with correction start 
+df_long_norm$neg_accel_time = df_long_norm$neg_accel_bool * df_long_norm$norm_time
+
+df_long_norm %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::mutate(
+    neg_accel_trial = min(neg_accel_diff) == -1
+  ) -> df_long_norm
+  
+# how many are there?
+df_long_norm %>%
+  dplyr::filter(coordinate == "y_inter") %>%
+  dplyr::group_by(pilot, id, condition, trial) %>%
+  dplyr::summarize(
+    neg_accel_trial = unique(neg_accel_trial)
+  ) %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarise(
+    count = sum(neg_accel_trial)
+  )
+
+#### NOTE: how to do IECE when there is no reliable way to determine error at a given stage in the movement? I could extrapolate from screen error where target should be for given trial. ####
+
+# Identify/Plot Discontinuity Time Points ----
+df_long_norm %>%
+  dplyr::filter(coordinate == "y_inter") %>%
+  dplyr::group_by(pilot, id, condition, trial) %>%
+  dplyr::summarize(
+    neg_accel_trial = unique(neg_accel_trial)
+    , accel_time_point = max(unique(neg_accel_time))
+    , neg_velo_trial = unique(neg_velo_trial)
+    , velo_time_point = max(unique(neg_velo_time))
+    , discontinuity_trial = unique(neg_accel_trial) | unique(neg_velo_trial)
+  ) %>% print(n=100) -> df_disccontinuity
+
+# create plotting function
+plot_discontinuities = function(ids_use, dev, y_label) {
+  df_long_norm$tempy = dplyr::pull(df_long_norm, dev)
+  rang = range(df_long_norm$tempy)
+  data_range = rang[2] - rang[1]
+  bottom = rang[1]
+  top = rang[2]
+  
+  dis_dat = df_disccontinuity[(as.numeric(df_disccontinuity$id) %in% ids_use),]
+  
+  df_long_norm %>%
+    dplyr::filter(coordinate == "y_inter", as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=norm_time, y=tempy, group=trial, color=trial), alpha = 0.5, size = .2)+
+    geom_point(data = dis_dat, aes(x=velo_time_point, y=top, group=trial, color=trial), alpha = 0.5, size = 0.5)+
+    geom_point(data = dis_dat, aes(x=accel_time_point, y=bottom, group=trial, color=trial), alpha = 0.5, size = 0.5)+
+    xlab("normalized time")+
+    ylab(y_label)+
+    facet_grid(id~condition) %>% print()
+}
+
+# plot velocities
+plot_discontinuities(1:10, "norm_velocity", "y velocity (mm/s)")
+plot_discontinuities(11:20, "norm_velocity", "y velocity (mm/s)")
+plot_discontinuities(21:30, "norm_velocity", "y velocity (mm/s)")
+# plot individual
+plot_discontinuities(2, "norm_velocity", "y velocity (mm/s)")
+
+# plot accelerations
+plot_discontinuities(1:10, "norm_acceleration", "y acceleration (mm/s^2)")
+plot_discontinuities(11:20, "norm_acceleration", "y acceleration (mm/s^2)")
+plot_discontinuities(21:30, "norm_acceleration", "y acceleration (mm/s^2)")
+# plot individual
+plot_discontinuities(2, "norm_acceleration", "y acceleration (mm/s^2)")
+
+
+
+# RM-ANOVA on Discontinuities ---- 
+
+# identify trials with at least one discontinuity 
+df_long_norm %>%
+  dplyr::filter(coordinate == "y_inter") %>%
+  dplyr::group_by(pilot, id, condition, trial) %>%
+  dplyr::summarize(
+    discontinuity_trial = unique(neg_accel_trial) | unique(neg_velo_trial)
+  ) %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarise(
+    count = sum(discontinuity_trial)
+  ) -> df_disccontinuity_anova
+
+# run anova
 ezANOVA(
-  df_xrsq_anova
-  , dv = R_sq
+  df_disccontinuity_anova
+  , dv = count
   , wid = id
-  , within = .(condition, kinematic_marker)
-  # , between = blocking
+  , within = .(condition)
 )
 ezPlot(
-  df_xrsq_anova
-  , dv = R_sq
+  df_disccontinuity_anova
+  , dv = count
   , wid = id
-  , within = .c(condition, kinematic_marker)
-  # , between = blocking
-  , x = kinematic_marker
-  , split = condition
+  , within = .c(condition)
+  , x = condition
   , do_bar = F
-  , y_lab = "x R^2"
-  , x_lab = "kinematic marker"
+  , y_lab = "y discontinuity count"
+  , x_lab = "condition"
 )
 
 
 
 
+########################################################
+####        Gaussian Process Regression             ####
+########################################################
+
+# Binning Waveforms ----
+
+# select only a single coordinate for a given analysis
+df_long_trim %>%
+  dplyr::filter(coordinate == "y_inter") -> df_long_trimy
+
+# specify bin width
+bin_width = 1/10
+
+# normalize time
+df_long_trimy %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::mutate(
+    time_lores = round0((zero_time-min(zero_time))/(max(zero_time)-min(zero_time)), bin_width)
+  ) -> df_long_trimy
+
+df_long_trimy %>%
+  dplyr::group_by(blocking, pilot, id, condition, trial, coordinate, time_lores) %>%
+  dplyr::summarize(
+    position_bin = mean(centered_position) 
+    , velocity_bin = mean(velocity)
+    , acceleration_bin = mean(acceleration)
+  ) -> df_long_biny
+
+# create function to plot binned data
+plot_bin = function(ids_use, y_label) {
+  df_long_biny %>%
+    dplyr::filter(as.numeric(id) %in% ids_use) %>%
+      ggplot()+
+      geom_line(aes(x=time_lores, y=position_bin, color=trial, group=trial), alpha = 0.2)+
+      facet_grid(id~condition)+
+      ylab(y_label)+
+      xlab("normalized time") %>% print()
+}
+
+plot_bin(1:10, "y binned position (mm)")
+plot_bin(11:21, "y binned position (mm)")
+plot_bin(21:31, "y binned position (mm)")
+
+# averave over trials
+df_long_biny %>%
+  group_by(blocking, pilot, id, condition, coordinate, time_lores) %>%
+  dplyr::summarise(position_bin_avg = mean(position_bin)) -> df_id_meansy
+
+# plot participant mean trajectories
+df_id_meansy %>%
+  ggplot()+
+  geom_line(aes(x=time_lores, y=position_bin_avg, color = id), alpha = 0.5)+
+  facet_grid(.~condition)+
+  xlab('normalized time')+
+  ylab('y binned position (mm)')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = 'black')
+  )
+
+# average over participants
+df_id_meansy %>%
+  group_by(condition, coordinate, time_lores) %>%
+  dplyr::summarise(position_bin_grand_avg = mean(position_bin_avg)) -> df_condition_meansy
+
+# plot population mean trajectories
+df_condition_meansy %>%
+  ggplot()+
+  geom_line(aes(x=time_lores, y=position_bin_grand_avg, color = condition))+
+  xlab('normalized time')+
+  ylab('y binned position (mm)')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = 'black')
+  )
 
 
+# Visualize Priors ----
+
+# in this section, one is intended to play around around with prior distributions 
+# and also test different GP hyperparameters to see what sorts of GP samples are possible given those hyperparameters
+# ultimately the code of this section aids in specifying reasonable priors for the data in question
+
+# subj_volatility_sd
+curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "subject volatility sd")
+
+# subj_volatility
+curve(dcauchy(x, 0, mean(rweibull(1000, 2, 1))), 0, 5, ylab = "density", xlab = "subject volatility")
+
+# volatility
+curve(dcauchy(x, 0, 10), 0, 50, ylab = "density", xlab = "population volatility")
+
+# subj_amplitude_sd
+curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "subject amplitude sd")
+
+# subj_amplitude
+curve(dnorm(x, 0, mean(rweibull(1000, 2, 1))), 0, 5, ylab = "density", xlab = "subject amplitude")
+
+# amplitude
+curve(dweibull(x, 2, 1), 0, 5, ylab = "density", xlab = "population amplitude")
+
+# trajectory time points
+xx = seq(0, 1, 0.001) 
+
+# number of time points
+n_x = length(xx)
+
+# mean function
+mu = rep(0, n_x)
+
+# covariance matrix hyperparameters
+amplitudes = 5
+volatilities = 15  
+
+# define covariance matrix
+Sigmas = matrix(0, n_x, n_x)
+for (i in 1:n_x){
+  for (j in 1:n_x){
+    Sigmas[i, j] = amplitudes^2*exp(-volatilities^2*(1/2)*(x[i] - x[j])^2)
+  }
+}
+
+# number of samples of GP with covariance defined above
+nn = 5
+
+# sample from GP
+fs = mvrnorm(nn, mu, Sigmas)
+
+# transform to data frame
+fs_df = data.frame(t(fs))
+
+# reorganize data frame
+fs_df %>%
+  gather(sample, position, 1:nn, factor_key = T) -> fs_df
+
+# add arbitrary time column
+fs_df$time = rep(1:table(fs_df$sample)[[1]], nn)
+
+# plot samples
+fs_df %>%
+  ggplot()+
+  geom_line(aes(x=time, y=position, color=sample), size = 2)+  
+  ylim(c(-12, 12))+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white")
+    , axis.ticks = element_blank()
+    , axis.text = element_blank()
+    , axis.title = element_blank()
+  )
+
+
+# Rstan ----
+
+# get the sorted unique value for x
+x = sort(unique(df_long_biny$time_lores))
+
+# for each value in df_long_biny$time_lores, get its index x
+x_index = match(df_long_biny$time_lores,x)
+
+# do something similar for the subjects 
+s = sort(unique(df_long_biny$id))
+s_index = match(df_long_biny$id, s)
+
+# compute the model matrix
+z = data.frame(
+  condition1 = ifelse(df_long_biny$condition == "vision", 1, 0)
+  , condition2 =ifelse(df_long_biny$condition == "no_vision", 1, 0)
+)
+
+# compute the unique entries in the model matrix
+temp = as.data.frame(z)
+temp = tidyr::unite_(data = temp, col = 'combined', from = names(temp))
+temp_unique = unique(temp)
+z_unique = z[row.names(z)%in%row.names(temp_unique),]
+
+# for each row in z, get its index z_unique
+z_unique_index = match(temp$combined,temp_unique$combined)
+
+# combine the two index objects to get the index into the flattened z_by_f vector
+z_by_f_index = z_unique_index + (x_index-1)*nrow(z_unique)
+
+# get one index object for each participant
+z_by_f_by_s = array(split(z_by_f_index, s_index))
+
+# specify number of observations for a given participant
+subj_obs = NULL
+for (si in 1:length(z_by_f_by_s)) {
+  subj_obs = c(subj_obs, length(z_by_f_by_s[[si]]))
+}
+
+# create a padded version of the z_by_f_by_s object so that the entry for each participant has the same number of observations
+z_by_f_by_s_pad = array(0,dim=c(n,10000))
+for (si in 1:length(subj_obs)) {
+  z_by_f_by_s_pad[si,] = c(z_by_f_by_s[[si]], rep(0, 10000 - subj_obs[si]))
+}
+
+# if real data
+y = scale(df_long_biny$position_bin)[,1]  # scaled to mean=0,sd=1
+
+# get data specific to each participant
+y_by_s = array(split(y, s_index))
+
+# pad that data
+y_by_s_pad = array(0,dim=c(n,10000))
+for (si in 1:length(subj_obs)) {
+  y_by_s_pad[si,] = c(y_by_s[[si]], rep(0, 10000 - subj_obs[si]))
+}
+
+# create the data list for stan
+data_for_stan = list(
+  n_y = nrow(df_long_biny)
+  , y = y_by_s_pad
+  , n_x = length(x)
+  , x = (x-min(x))/(max(x)-min(x)) #scaled to min=0,max=1
+  , x_index = x_index
+  , n_subj = length(s)
+  , n_z = ncol(z)
+  , rows_z_unique = nrow(z_unique)
+  , z_unique = z_unique
+  , z_by_f_by_s_pad = z_by_f_by_s_pad
+  , subj_obs = subj_obs
+)
+
+# # package for cluster
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/data_for_stan.RData")
+
+# # see 'cluster_analysis'
+# mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_study/gp_regression.stan")
+# post_test = sampling(
+#   mod
+#   , data = data_for_stan
+#   , iter = 50
+#   , init = 0
+#   , chains = 2
+#   , cores = 2
+#   , verbose = T
+#   , control = list(
+#     max_treedepth = 15
+#     , adapt_delta = 0.99
+#     )
+#   , refresh = 1
+#   , include = F
+#   , pars = c(
+#     'f_normal01'
+#     , 'subj_f_normal01'
+#     , 'volatility_helper'
+#     , 'subj_volatility_helper'
+#     , 'noise_f_normal01'
+#     , 'noise_subj_f_normal01'
+#     , 'noise_volatility_helper'
+#     , 'noise_subj_volatility_helper'
+#   )
+# )
 

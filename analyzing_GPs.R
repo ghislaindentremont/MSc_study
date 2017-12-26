@@ -391,8 +391,7 @@ data_for_stan = list(
 # Examine Results ----
 
 # load stan fit object that was computed in the cloud
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_proposal_post_500_15.rdata")
-
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_proposal_15/fake_proposal_post_500_15.rdata")
 
 
 ###################################################################
