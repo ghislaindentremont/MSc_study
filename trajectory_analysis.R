@@ -8,6 +8,10 @@ library(ez)
 library(MASS)
 library(reshape2)
 library(rstan)
+library(fda.usc)
+library(R.matlab)
+library(coda)
+# library(ezStan)
 
 setwd("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/touch_screen")
 
@@ -2253,14 +2257,14 @@ plot_discontinuities = function(ids_use, dev, y_label) {
 # plot velocities
 plot_discontinuities(1:10, "norm_velocity", "y velocity (mm/s)")
 plot_discontinuities(11:20, "norm_velocity", "y velocity (mm/s)")
-plot_discontinuities(21:30, "norm_velocity", "y velocity (mm/s)")
+plot_discontinuities(21:33, "norm_velocity", "y velocity (mm/s)")
 # plot individual
 plot_discontinuities(2, "norm_velocity", "y velocity (mm/s)")
 
 # plot accelerations
 plot_discontinuities(1:10, "norm_acceleration", "y acceleration (mm/s^2)")
 plot_discontinuities(11:20, "norm_acceleration", "y acceleration (mm/s^2)")
-plot_discontinuities(21:30, "norm_acceleration", "y acceleration (mm/s^2)")
+plot_discontinuities(21:33, "norm_acceleration", "y acceleration (mm/s^2)")
 # plot individual
 plot_discontinuities(2, "norm_acceleration", "y acceleration (mm/s^2)")
 
@@ -2300,6 +2304,153 @@ ezPlot(
 
 
 
+########################################################
+####               Spline Method                    ####
+########################################################
+
+num_samples = 200
+
+df_spline = ddply(
+  .data = df_long_trim
+  , .variables = .(pilot, id, condition, trial, coordinate)
+  , .fun = function(x){
+    temp = smooth.spline(x$zero_time, x$centered_position)  # 4th order (i.e. cubic)
+    pred = predict(temp, seq(min(temp$x), max(temp$x), length.out = num_samples))
+
+    return(data.frame(pred_x = pred$x, pred_y = pred$y))
+  }
+)
+
+# normalize function values (0 an 1)
+df_spline %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
+  dplyr::mutate(
+    norm_y = (pred_y-min(pred_y))/(max(pred_y)-min(pred_y))
+    , norm_x = 1:length(pred_y)
+  ) -> df_spline
+
+# average over trials
+df_spline %>%
+  dplyr::group_by(pilot, id, condition, coordinate, norm_x) %>%
+  dplyr::summarize(
+    norm_y = mean(norm_y)
+  ) -> df_spline_avg
+
+# select only primary movement axis
+df_spline_avg_y = df_spline_avg %>% dplyr::filter(coordinate == "y_inter")
+
+# spread to take difference wave
+df_spline_avg_y %>%
+  spread(condition, norm_y) -> df_spline_effect 
+
+# calculate effect of vision condition
+df_spline_effect$v_minus_nv = df_spline_effect$vision - df_spline_effect$no_vision
+
+# get group averages 
+df_spline_effect %>% 
+  dplyr::group_by(norm_x) %>%
+  dplyr::summarise(
+    M = mean(v_minus_nv)
+    , SD = sd(v_minus_nv)
+    , SE = SD/sqrt(length(v_minus_nv))
+  ) -> df_spline_effect_avg
+
+# plot
+df_spline_effect_avg %>%
+  ggplot(aes(x=norm_x, y=M))+
+  geom_line()+
+  geom_errorbar(aes(ymin=M-SE, ymax=M+SE))+
+  xlab("time index")+
+  ylab("y normalized position effect (vision - no-vision)")
+
+
+# Plot 2D Waveforms ----
+# trial-wise
+df_spline %>%
+  dplyr::select(-c(pred_x, pred_y)) %>%
+  spread(coordinate, norm_y) -> df_2D
+
+plot_2D = function(ids_use) {
+  df_2D %>%
+    dplyr::filter(as.numeric(id) %in% ids_use) %>%
+    ggplot(aes(x=x_inter, y=y_inter, group=trial, color=trial))+
+    geom_path()+
+    facet_grid(condition~id)+
+    xlab("normalized x position")+
+    ylab("normalized y position")
+}
+
+plot_2D(1:10)
+plot_2D(11:20)
+plot_2D(21:33)
+
+# id averages 
+df_spline_avg %>%
+  spread(coordinate, norm_y) -> df_2D_avg
+
+df_2D_avg %>%
+  ggplot(aes(x=x_inter, y=y_inter, group=id, color=id))+
+  geom_path()+
+  facet_grid(.~condition)+
+  xlab("normalized x position")+
+  ylab("normalized y position")
+
+# group averages
+df_spline_avg %>%
+  dplyr::group_by(condition, coordinate, norm_x) %>%
+  dplyr::summarize(
+    norm_y = mean(norm_y)
+  ) -> df_spline_avg_group
+
+df_spline_avg_group %>%
+  spread(coordinate, norm_y) -> df_2D_avg_group
+
+df_2D_avg_group %>%
+  ggplot(aes(x=x_inter, y=y_inter, group=condition, color=condition))+
+  geom_path()+
+  xlab("normalized x position")+
+  ylab("normalized y position")
+
+
+# Run fda.usc Functional Anova ----
+# transform fitted data into proper matrix form
+df_spline_mat = matrix(df_spline_avg_y$norm_y, nrow=n*2, ncol=num_samples, byrow=T)
+
+# transform fitted data matrix into fdata object
+fdata_y = fdata(df_spline_mat)
+
+# get condition for each curve
+df_spline_avg_y %>%
+  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::summarise(
+    group = unique(condition)
+  ) -> df_spline_groups
+
+# run functional anova 
+anova.onefactor(fdata_y, df_spline_groups$group, plot=T, verbose=T)
+
+
+# For MATLAB ----
+df_long_trim %>% 
+  dplyr::select(pilot, id, blocking, condition, trial, coordinate, zero_time, centered_position) %>%
+  spread(coordinate, centered_position) -> df_for_matlab2
+
+df_for_matlab2 %>%
+  dplyr::group_by() %>%
+  dplyr::mutate(
+    id = as.numeric(id)
+    , blocking = as.numeric(blocking)  # 1: vision
+    , condition = as.numeric(condition)  # 1: no-vision
+  ) -> df_for_matlab
+
+# convert to matrix
+mat_long_trim = as.matrix(df_for_matlab[,c("id", "condition", "trial", "y_inter", "x_inter", "z_inter")])
+
+# save matrix as .mat file 
+write.csv(mat_long_trim, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/FDA/mat_long_trim.csv")
+
+
+
 
 ########################################################
 ####        Gaussian Process Regression             ####
@@ -2312,7 +2463,7 @@ df_long_trim %>%
   dplyr::filter(coordinate == "y_inter") -> df_long_trimy
 
 # specify bin width
-bin_width = 1/10
+bin_width = 1/14
 
 # normalize time
 df_long_trimy %>%
@@ -2328,6 +2479,9 @@ df_long_trimy %>%
     , velocity_bin = mean(velocity)
     , acceleration_bin = mean(acceleration)
   ) -> df_long_biny
+
+# for later plotting
+df_long_biny$position_bin_scale = scale(df_long_biny$position_bin)[,1]
 
 # create function to plot binned data
 plot_bin = function(ids_use, y_label) {
@@ -2347,7 +2501,10 @@ plot_bin(21:31, "y binned position (mm)")
 # averave over trials
 df_long_biny %>%
   group_by(blocking, pilot, id, condition, coordinate, time_lores) %>%
-  dplyr::summarise(position_bin_avg = mean(position_bin)) -> df_id_meansy
+  dplyr::summarise(
+    position_bin_avg = mean(position_bin)
+    , position_bin_scale_avg = mean(position_bin_scale)
+    ) -> df_id_meansy
 
 # plot participant mean trajectories
 df_id_meansy %>%
@@ -2367,7 +2524,10 @@ df_id_meansy %>%
 # average over participants
 df_id_meansy %>%
   group_by(condition, coordinate, time_lores) %>%
-  dplyr::summarise(position_bin_grand_avg = mean(position_bin_avg)) -> df_condition_meansy
+  dplyr::summarise(
+    position_bin_grand_avg = mean(position_bin_avg)
+    , position_bin_scale_grand_avg = mean(position_bin_scale_avg)
+    ) -> df_condition_meansy
 
 # plot population mean trajectories
 df_condition_meansy %>%
@@ -2534,8 +2694,8 @@ data_for_stan = list(
   , subj_obs = subj_obs
 )
 
-# # package for cluster
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/data_for_stan.RData")
+# package for cluster
+save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/data_for_stan_15.RData")
 
 # # see 'cluster_analysis'
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_study/gp_regression.stan")
@@ -2564,4 +2724,781 @@ data_for_stan = list(
 #     , 'noise_subj_volatility_helper'
 #   )
 # )
+
+
+
+# Examine Results ----
+
+
+# load stan fit object that was computed in the cloud
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory\ Studies/MSc_results/post_500_11.rdata")
+
+
+
+#### Overview
+
+# how long did it take (in hours)?
+sort(rowSums(get_elapsed_time(post)/60/60))
+
+# function from 'ezStan' package
+stan_summary = function(
+  from_stan
+  , par
+  , probs = c(.5,.025,.975)
+  , digits = 2
+  , X = NULL
+  , W = NULL
+  , B = NULL
+  , is_cor = F
+  , return_array = F
+){
+  
+  s = summary(object=from_stan,pars=par,probs=probs,use_cache=F)$summary
+  s = array(
+    s[,4:ncol(s)]
+    , dim = c(dim(s)[1],ncol(s)-3)
+    , dimnames = list(
+      dimnames(s)[[1]]
+      , dimnames(s)[[2]][4:ncol(s)]
+    )
+  )
+  if(!is_cor){
+    if(!is.null(X)){
+      dimnames(s)[[1]] = dimnames(X)[[2]]
+    }
+    if(!is.null(W)){
+      dimnames(s)[[1]] = names_from_WB(W,B)
+    }
+  }else{
+    temp = dimnames(s)[[1]]
+    temp = gsub(']','',temp)
+    temp = unlist(strsplit(temp,'[',fixed=T))
+    temp = temp[(1:length(temp))%%2==0]
+    temp = unlist(strsplit(temp,',',fixed=T))
+    v1 = temp[(1:length(temp))%%2==1]
+    v2 = temp[(1:length(temp))%%2==0]
+    keep = v2>v1
+    v1 = v1[keep]
+    v2 = v2[keep]
+    if(!is.null(X)){
+      v1 = dimnames(X)[[2]][as.numeric(v1)]
+      v2 = dimnames(X)[[2]][as.numeric(v2)]
+    }
+    if(!is.null(W)){
+      temp = names_from_WB(W,B)
+      v1 = temp[as.numeric(v1)]
+      v2 = temp[as.numeric(v2)]
+    }
+    s = array(
+      s[keep,]
+      , dim = c(sum(keep),ncol(s))
+      , dimnames = list(
+        paste(v1,v2,sep='~')
+        , dimnames(s)[[2]]
+      )
+    )
+  }
+  if(!return_array){
+    print(s,digits=digits)
+  }else{
+    return(s)
+  }
+}
+
+# population hyperparameter estimates
+stan_summary(
+  from_stan = post
+  , par = c('volatility','amplitude', 'noise_volatility', 'noise_amplitude')
+)
+
+# participant-to-participant variability estimates
+stan_summary(
+  from_stan = post
+  , par = c('subj_volatility_sd','subj_amplitude_sd', 'noise_subj_volatility_sd','noise_subj_amplitude_sd')
+)
+
+# population mean function
+stan_summary(
+  from_stan = post
+  , par = c('f')
+)
+
+# population noise function
+stan_summary(
+  from_stan = post
+  , par = c('noise_f')
+)
+
+# participant mean functions
+stan_summary(
+  from_stan = post
+  , par = c('subj_f')
+)
+
+# participant noise functions
+stan_summary(
+  from_stan = post
+  , par = c('noise_subj_f')
+)
+
+
+
+
+####                 Violins 
+
+
+# Functions ----
+
+# highest density interval functions (HDIs)
+get_95_HDI = function(y) {
+  HDI = HPDinterval( as.mcmc( as.vector(y) ), prob = .95 )
+  # Den = density( as.vector(y) )
+  min = HDI[1]
+  # mod = Den$x[which(Den$y == max(Den$y))] # mode as indicator of central tendency
+  med = median(y)
+  max = HDI[2]
+  return( c( ymin = min, y = med, ymax = max) )
+}
+
+get_50_HDI = function(y) {
+  HDI = HPDinterval( as.mcmc( as.vector(y) ), prob = .50 )
+  # Den = density( as.vector(y) )
+  min = HDI[1]
+  # mod = Den$x[which(Den$y == max(Den$y))]  # mode as indicator of central tendency
+  med = median(y)
+  max = HDI[2]
+  return( c( ymin = min, y = med, ymax = max) )
+}
+
+# get violin plots
+get_violin = function(df, y_lab, samps = 16*500/2, hline = FALSE, facet = FALSE) {
+
+  df$condition = factor(df$condition)
+
+  gg = ggplot(data = df)+
+    geom_violin(aes(x = condition, y = value))+
+    labs(x = "", y = y_lab)+
+    stat_summary(aes(x = condition, y = value), fun.data = get_95_HDI, size = 0.5)+
+    stat_summary(aes(x = condition, y = value), fun.data = get_50_HDI, size = 1.5)
+
+  if (hline) {
+    gg = gg + geom_hline(yintercept = 0, linetype = 2, size = 1)
+  }
+
+  if (facet) {
+    gg = gg + facet_wrap(~condition, scales = "free")
+  }
+
+  gg = gg + theme_gray(base_size = 20)+
+    theme(
+      panel.grid.major = element_line(size = 1)
+      , panel.grid.minor = element_line(size = 0.5)
+      , strip.background = element_blank()
+      , strip.text.x = element_blank()
+      , axis.ticks.x = element_blank()
+    )
+
+  print(gg)
+
+  print( get_95_HDI(subset(df, condition == "condition1")$value) )
+  print( get_95_HDI(subset(df, condition == "condition2")$value)  )
+
+  return(gg)
+}
+
+
+
+# Parameters ----
+
+# extract posterior samples
+post_samples = rstan::extract(post)
+
+# population mean volatilty
+volatilities = data.frame(post_samples$volatility)
+names(volatilities) = c("condition1", "condition2")
+volatilities %>%
+  gather(condition, value, condition1:condition2) -> volatilities
+
+gg_volatilities = get_violin(volatilities, "volatility")
+
+# population mean amplitude
+amplitudes = data.frame(post_samples$amplitude)
+names(amplitudes) = c("condition1", "condition2")
+amplitudes %>%
+  gather(condition, value, condition1:condition2) -> amplitudes
+
+gg_amplitudes = get_violin(amplitudes, "amplitude")
+
+
+# participant mean volatilty sd
+subj_volatility_sds = data.frame(post_samples$subj_volatility_sd)
+names(subj_volatility_sds) = c("condition1", "condition2")
+subj_volatility_sds %>%
+  gather(condition, value, condition1:condition2) -> subj_volatility_sds
+
+gg_volatility_sds = get_violin(subj_volatility_sds, "participant volatility sd")
+
+
+# participant mean amplitude sd
+subj_amplitude_sds = data.frame(post_samples$subj_amplitude_sd)
+names(subj_amplitude_sds) = c("condition1", "condition2")
+subj_amplitude_sds %>%
+  gather(condition, value, condition1:condition2) -> subj_amplitude_sds
+
+gg_amplitude_sds = get_violin(subj_amplitude_sds, "participant amplitude sd")
+
+
+# population noise volatilty
+noise_volatilities = data.frame(post_samples$noise_volatility)
+names(noise_volatilities) = c("condition1", "condition2")
+noise_volatilities %>%
+  gather(condition, value, condition1:condition2) -> noise_volatilities
+
+gg_noise_volatilities = get_violin(noise_volatilities, "noise volatility")
+
+
+# population noise amplitude
+noise_amplitudes = data.frame(post_samples$noise_amplitude)
+names(noise_amplitudes) = c("condition1", "condition2")
+noise_amplitudes %>%
+  gather(condition, value, condition1:condition2) -> noise_amplitudes
+
+gg_noise_amplitudes = get_violin(noise_amplitudes, "noise amplitude")
+
+
+# participant noise volatilty sd
+noise_subj_volatility_sds = data.frame(post_samples$noise_subj_volatility_sd)
+names(noise_subj_volatility_sds) = c("condition1", "condition2")
+noise_subj_volatility_sds %>%
+  gather(condition, value, condition1:condition2) -> noise_subj_volatility_sds
+
+gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds, "noise participant volatility sd")
+
+
+# participant noise amplitude sd
+noise_subj_amplitude_sds = data.frame(post_samples$noise_subj_amplitude_sd)
+names(noise_subj_amplitude_sds) = c("condition1", "condition2")
+noise_subj_amplitude_sds %>%
+  gather(condition, value, condition1:condition2) -> noise_subj_amplitude_sds
+
+gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds, "noise participant amplitude sd")
+
+
+
+
+####   Subject Level
+
+
+# Mean ----
+
+# extract samples
+subj_f = rstan::extract(
+  post
+  , pars = 'subj_f'
+)[[1]]
+
+# condition 1
+subj_condition1 = NULL
+for (si in 1:dim(subj_f)[2]) {
+  temp = data.frame(subj_f[,si,,1])
+  temp$id = si
+  temp$sample = 1:nrow(temp)
+  subj_condition1 = rbind(subj_condition1, temp)
+}
+
+subj_f_1 = subj_condition1 %>%
+  gather(key="time", value="value", -c(sample, id)) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 1
+  )
+
+# condition2
+subj_condition2 = NULL
+for (si in 1:dim(subj_f)[2]) {
+  temp = data.frame(subj_f[,si,,2])
+  temp$id = si
+  temp$sample = 1:nrow(temp)
+  subj_condition2 = rbind(subj_condition2, temp)
+}
+
+subj_f_2 = subj_condition2 %>%
+  gather(key="time", value="value", -c(sample, id)) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 2
+  )
+
+# get GP of conditions
+subj_f_sum = rbind(subj_f_1, subj_f_2)
+subj_f_sum %>%
+  spread(condition, value) -> subj_f_sum
+
+names(subj_f_sum)[4:5] = c("condition1", "condition2")
+
+subj_to_plot = subj_f_sum %>%
+  dplyr::group_by(
+    time
+    , id
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(condition1)
+    , lo95_1 = quantile(condition1,.025)
+    , hi95_1 = quantile(condition1,.975)
+    , lo50_1 = quantile(condition1,.25)
+    , hi50_1 = quantile(condition1,.75)
+    
+    , med_2 = median(condition2)
+    , lo95_2 = quantile(condition2,.025)
+    , hi95_2 = quantile(condition2,.975)
+    , lo50_2 = quantile(condition2,.25)
+    , hi50_2 = quantile(condition2,.75)
+  )
+
+
+subj_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1, color = factor(id)))+
+  geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
+  geom_line(data = subset(df_id_meansy, condition == "vision"), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id), size = 0.5, color = "gray50")+
+  ylab('position')+
+  xlab('time')+ 
+  ggtitle('vision')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  ) ->p1
+print(p1)
+
+# figure out participant details
+p1cols = ggplot_build(p1)$data[[1]]
+
+# just pick one subject
+subj_to_plot %>%
+  group_by(id) %>%
+  dplyr::summarise(mins = min(med_1)) %>%
+  dplyr::summarise(idx = which.min(mins))
+
+subj_to_plot %>%
+  dplyr::filter(id == 11, time >=8, time <=10) -> subj_to_plot_11
+
+p1cols %>%
+  dplyr::filter(group ==11, x == 1)
+
+subj_to_plot_11 %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = '#00BFC4', size = 2)+
+  geom_line(aes(x=time, y=hi95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
+  geom_line(aes(x=time, y=lo95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
+  geom_line(data = subset(df_id_meansy, condition == "vision" & id == 11 & time_lores/bin_width+1 >=8 & time_lores/bin_width+1 <=10), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
+  ylab('')+
+  xlab('')+ 
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , axis.ticks = element_line(size = 0)
+    , axis.text = element_blank()
+    , legend.position = "none"
+    , panel.border = element_rect(size = 2, fill = NA)
+    , panel.background = element_rect(fill = "white", color = "black")
+  ) 
+
+# condition 2
+subj_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_2, color = factor(id)))+
+  geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
+  geom_line(data = subset(df_id_meansy, condition == "no_vision"), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id ),size = 0.5, color = "gray50")+
+  ylab('position')+
+  xlab('time')+ 
+  ggtitle('no vision')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  ) -> p2
+print(p2)
+
+# figure out participant details
+p2cols = ggplot_build(p2)$data[[1]]
+
+# just pick one subject
+subj_to_plot %>%
+  group_by(id) %>%
+  dplyr::summarise(mins = min(med_2)) %>%
+  dplyr::summarise(idx = which.min(mins))
+
+subj_to_plot %>%
+  dplyr::filter(id == 6, time >=1, time <=3) -> subj_to_plot_6
+
+p1cols %>%
+  dplyr::filter(group ==6, x == 1)
+
+subj_to_plot_6 %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_2), color = '#7CAE00', size = 2)+
+  geom_line(aes(x=time, y=hi95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
+  geom_line(aes(x=time, y=lo95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
+  geom_line(data = subset(df_id_meansy, condition == "no_vision" & id == 6 & time_lores/bin_width+1 >=1 & time_lores/bin_width+1 <=3), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
+  ylab('')+
+  xlab('')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , axis.ticks = element_line(size = 0)
+    , axis.text = element_blank()
+    , legend.position = "none"
+    , panel.border = element_rect(size = 2, fill = NA)
+    , panel.background = element_rect(fill = "white", color = "black")
+  ) 
+
+
+
+# Noise ----
+
+# extract samples
+noise_subj_f = rstan::extract(
+  post
+  , pars = 'noise_subj_f'
+)[[1]]
+
+# condition1
+noise_subj_condition1 = NULL
+for (si in 1:dim(noise_subj_f)[2]) {
+  temp = data.frame(noise_subj_f[,si,,1])
+  temp$id = si
+  temp$sample = 1:nrow(temp)
+  noise_subj_condition1 = rbind(noise_subj_condition1, temp)
+}
+
+noise_subj_f_1 = noise_subj_condition1 %>%
+  gather(key="time", value="value", -c(sample, id)) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 1
+  )
+
+# condition2
+noise_subj_condition2 = NULL
+for (si in 1:dim(noise_subj_f)[2]) {
+  temp = data.frame(noise_subj_f[,si,,2])
+  temp$id = si
+  temp$sample = 1:nrow(temp)
+  noise_subj_condition2 = rbind(noise_subj_condition2, temp)
+}
+
+noise_subj_f_2 = noise_subj_condition2 %>%
+  gather(key="time", value="value", -c(sample, id)) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 2
+  )
+
+# get GP of conditions
+noise_subj_f_sum = rbind(noise_subj_f_1, noise_subj_f_2)
+noise_subj_f_sum %>%
+  spread(condition, value) -> noise_subj_f_sum
+
+names(noise_subj_f_sum)[4:5] = c("condition1", "condition2")
+
+noise_subj_to_plot = noise_subj_f_sum %>%
+  dplyr::group_by(
+    time
+    , id
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(condition1)
+    , lo95_1 = quantile(condition1,.025)
+    , hi95_1 = quantile(condition1,.975)
+    , lo50_1 = quantile(condition1,.25)
+    , hi50_1 = quantile(condition1,.75)
+    
+    , med_2 = median(condition2)
+    , lo95_2 = quantile(condition2,.025)
+    , hi95_2 = quantile(condition2,.975)
+    , lo50_2 = quantile(condition2,.25)
+    , hi50_2 = quantile(condition2,.75)
+  )
+
+# get SDs
+df_long_biny %>%
+  group_by(id, time_lores, condition) %>%
+  dplyr::summarise(
+    SD = log(sd(position_bin_scale))
+  ) -> noise_df_long_biny
+
+noise_subj_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1, color = factor(id)))+
+  geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
+  geom_line(data = subset(noise_df_long_biny, condition == "vision"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
+  ylab('log standard deviation')+
+  xlab('time')+
+  ggtitle('vision')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+noise_subj_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_2, color = factor(id)))+
+  geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
+  geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
+  geom_line(data = subset(noise_df_long_biny, condition == "no_vision"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
+  ylab('log standard deviation')+
+  xlab('time')+
+  ggtitle('no vision')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+
+
+
+
+#-----------------------------------------------------------------#
+####                  Population Level                         ####
+#-----------------------------------------------------------------#
+
+
+# Mean ----
+
+# extract samples
+f = rstan::extract(
+  post
+  , pars = 'f'
+)[[1]]
+
+# get GP of intercept
+condition1 = data.frame(f[,,1])
+condition1$sample = 1:nrow(condition1)
+f_1 = condition1 %>%
+  gather(key="time", value="value", -sample) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 1
+  )
+
+# get GP of condition 2
+condition2 = data.frame(f[,,2])
+condition2$sample = 1:nrow(condition2)
+f_2 = condition2 %>%
+  gather(key="time", value="value", -sample) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 2
+  )
+
+# get GP of conditions
+f_sum = rbind(f_1, f_2)
+f_sum %>%
+  spread(condition, value) -> f_sum
+
+names(f_sum)[3:4] = c("condition1", "condition2")
+
+to_plot = f_sum %>%
+  dplyr::group_by(
+    time
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(condition1)
+    , lo95_1 = quantile(condition1,.025)
+    , hi95_1 = quantile(condition1,.975)
+    , lo50_1 = quantile(condition1,.25)
+    , hi50_1 = quantile(condition1,.75)
+
+    , med_2 = median(condition2)
+    , lo95_2 = quantile(condition2,.025)
+    , hi95_2 = quantile(condition2,.975)
+    , lo50_2 = quantile(condition2,.25)
+    , hi50_2 = quantile(condition2,.75)
+  )
+
+to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = "turquoise")+
+  geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(data=subset(df_condition_meansy, condition == "vision"), aes(x=time_lores/bin_width+1, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
+  ylab('position')+
+  xlab('time')+
+  ggtitle('vision')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_2), color = "red")+
+  geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
+  geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
+  geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores/bin_width+1, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
+  ylab('position')+
+  xlab('time')+
+  ggtitle('no vision')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+# and against one another
+to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = "turquoise")+
+  geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(aes(x=time, y=med_2), color = "red")+
+  geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
+  geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
+  annotate("text", label = "vision", x = 3, y = -0.15, color = "turquoise")+
+  annotate("text", label = "no vision", x = 9, y = -1.25, color = "red")+
+  ylab('position')+
+  xlab('time')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+
+
+# Noise ----
+noise_f = rstan::extract(
+  post
+  , pars = 'noise_f'
+)[[1]]
+
+# get GP of intercept
+noise_condition1 = data.frame(noise_f[,,1])
+noise_condition1$sample = 1:nrow(noise_condition1)
+noise_f_1 = noise_condition1 %>%
+  gather(key="time", value="value", -sample) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 1
+  )
+
+# get GP of condition 2
+noise_condition2 = data.frame(noise_f[,,2])
+noise_condition2$sample = 1:nrow(noise_condition2)
+noise_f_2 = noise_condition2 %>%
+  gather(key="time", value="value", -sample) %>%
+  dplyr::mutate(
+    time= as.numeric(gsub('X','',time))
+    , condition = 2
+  )
+
+# get GP of conditions
+noise_f_sum = rbind(noise_f_1, noise_f_2)
+noise_f_sum %>%
+  spread(condition, value) -> noise_f_sum
+
+names(noise_f_sum)[3:4] = c("condition1", "condition2")
+
+noise_to_plot = noise_f_sum %>%
+  dplyr::group_by(
+    time
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(condition1)
+    , lo95_1 = quantile(condition1,.025)
+    , hi95_1 = quantile(condition1,.975)
+    , lo50_1 = quantile(condition1,.25)
+    , hi50_1 = quantile(condition1,.75)
+
+    , med_2 = median(condition2)
+    , lo95_2 = quantile(condition2,.025)
+    , hi95_2 = quantile(condition2,.975)
+    , lo50_2 = quantile(condition2,.25)
+    , hi50_2 = quantile(condition2,.75)
+  )
+
+noise_df_long_biny %>%
+  group_by(time_lores, condition) %>%
+  dplyr::summarise(
+    avg_SD = mean(SD)
+  ) -> subj_noise
+
+noise_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = "turquoise")+
+  geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(data=subset(subj_noise, condition == "vision"), aes(x=time_lores/bin_width+1, y=avg_SD), size = 0.5, color = "gray50")+
+  ylab('log standard deviation')+
+  xlab('time')+
+  ggtitle('vision')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+noise_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_2), color = "red")+
+  geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
+  geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
+  geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores/bin_width+1, y=avg_SD), size = 0.5, color = "gray50")+
+  ylab('log standard deviation')+
+  xlab('time')+
+  ggtitle('no vision')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+# one against the other
+noise_to_plot %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = "turquoise")+
+  geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "turquoise")+
+  geom_line(aes(x=time, y=med_2), color = "red")+
+  geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
+  geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
+  ylab('log standard deviation')+
+  xlab('time')+
+  annotate("text", label = "vision", x = 2, y = -1.0, color = "turquoise")+
+  annotate("text", label = "no vision", x = 4, y = -2.5, color = "red")+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+
 

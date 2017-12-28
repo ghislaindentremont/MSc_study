@@ -1,5 +1,5 @@
 # Upload stan_data ----
-load("data_for_stan.RData")
+load("data_for_stan_15.RData")
 
 
 
@@ -43,6 +43,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'post_500_11.rdata'
+  , file = 'post_500_15.rdata'
 )
 
