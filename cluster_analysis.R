@@ -17,14 +17,14 @@ mod = rstan::stan_model("gp_regression.stan")
 post = sampling(
  mod
   , data = data_for_stan
-  , iter = 500
+  , iter = 200
   , init = 0
   , chains = 16
   , cores = 16
   , verbose = T
   , refresh = 1
   , control = list(
-    max_treedepth = 15
+    max_treedepth = 20
     , adapt_delta = 0.99  
   )  
   , include = F
@@ -43,6 +43,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'post_500_15.rdata'
+  , file = 'post_200_15_mtd20.rdata'
 )
 

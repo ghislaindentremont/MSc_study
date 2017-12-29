@@ -2227,9 +2227,9 @@ df_long_norm %>%
   dplyr::group_by(pilot, id, condition, trial) %>%
   dplyr::summarize(
     neg_accel_trial = unique(neg_accel_trial)
-    , accel_time_point = max(unique(neg_accel_time))
+    , accel_time_point = unique(neg_accel_time)[2]  # we pick earliest discontinuity
     , neg_velo_trial = unique(neg_velo_trial)
-    , velo_time_point = max(unique(neg_velo_time))
+    , velo_time_point = unique(neg_velo_time)[2]
     , discontinuity_trial = unique(neg_accel_trial) | unique(neg_velo_trial)
   ) %>% print(n=100) -> df_disccontinuity
 
@@ -2731,7 +2731,7 @@ save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Traj
 
 
 # load stan fit object that was computed in the cloud
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory\ Studies/MSc_results/post_500_11.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory\ Studies/MSc_results/post_500_15.rdata")
 
 
 
@@ -2900,8 +2900,8 @@ get_violin = function(df, y_lab, samps = 16*500/2, hline = FALSE, facet = FALSE)
 
   print(gg)
 
-  print( get_95_HDI(subset(df, condition == "condition1")$value) )
-  print( get_95_HDI(subset(df, condition == "condition2")$value)  )
+  # print( get_95_HDI(subset(df, condition == "condition1")$value) )
+  # print( get_95_HDI(subset(df, condition == "condition2")$value)  )
 
   return(gg)
 }
@@ -2915,71 +2915,117 @@ post_samples = rstan::extract(post)
 
 # population mean volatilty
 volatilities = data.frame(post_samples$volatility)
-names(volatilities) = c("condition1", "condition2")
+names(volatilities) = c("vision", "no_vision")
 volatilities %>%
-  gather(condition, value, condition1:condition2) -> volatilities
+  gather(condition, value, vision:no_vision) -> volatilities
 
 gg_volatilities = get_violin(volatilities, "volatility")
 
 # population mean amplitude
 amplitudes = data.frame(post_samples$amplitude)
-names(amplitudes) = c("condition1", "condition2")
+names(amplitudes) = c("vision", "no_vision")
 amplitudes %>%
-  gather(condition, value, condition1:condition2) -> amplitudes
+  gather(condition, value, vision:no_vision) -> amplitudes
 
 gg_amplitudes = get_violin(amplitudes, "amplitude")
 
 
+# # participant mean volatilty 
+# subj_volatility = data.frame(post_samples$subj_volatility)
+# 
+# # vision
+# subj_volatility_v = subj_volatility[,seq(1,29*2, 2)]
+# names(subj_volatility_v) = c(1:29)
+# subj_volatility_v %>% gather(condition, value, 1:29) -> subj_volatility_v_long
+# 
+# temp = get_violin(subj_volatility_v_long, "vision particiapnt volatilities")
+# temp+ylim(c(0,10))
+# 
+# # no-vision
+# subj_volatility_nv = subj_volatility[,seq(2,29*2, 2)]
+# names(subj_volatility_nv) = c(1:29)  
+# subj_volatility_nv %>% gather(condition, value, 1:29) -> subj_volatility_nv_long
+# 
+# temp = get_violin(subj_volatility_nv_long, "no-vision particiapnt volatilities")
+# temp+ylim(c(0,10))
+
+# # participant mean amplitude
+# subj_amplitude = data.frame(post_samples$subj_amplitude)
+# 
+# # vision
+# subj_amplitude_v = subj_amplitude[,seq(1,29*2, 2)]
+# names(subj_amplitude_v) = c(1:29)
+# subj_amplitude_v %>% gather(condition, value, 1:29) -> subj_amplitude_v_long
+# 
+# temp = get_violin(subj_amplitude_v_long, "vision particiapnt amplitudes")
+# 
+# # no-vision
+# subj_amplitude_nv = subj_amplitude[,seq(2,29*2, 2)]
+# names(subj_amplitude_nv) = c(1:29)  
+# subj_amplitude_nv %>% gather(condition, value, 1:29) -> subj_amplitude_nv_long
+# 
+# temp = get_violin(subj_amplitude_nv_long, "no-vision particiapnt amplitudes")
+
+
+# participant mean amplitude sd
+subj_amplitude_sds = data.frame(post_samples$subj_amplitude_sd)
+names(subj_amplitude_sds) = c("vision", "no_vision")
+subj_amplitude_sds %>%
+  gather(condition, value, vision:no_vision) -> subj_amplitude_sds
+
+gg_amplitude_sds = get_violin(subj_amplitude_sds, "participant amplitude sd")
+
+
 # participant mean volatilty sd
 subj_volatility_sds = data.frame(post_samples$subj_volatility_sd)
-names(subj_volatility_sds) = c("condition1", "condition2")
+names(subj_volatility_sds) = c("vision", "no_vision")
 subj_volatility_sds %>%
-  gather(condition, value, condition1:condition2) -> subj_volatility_sds
+  gather(condition, value, vision:no_vision) -> subj_volatility_sds
 
 gg_volatility_sds = get_violin(subj_volatility_sds, "participant volatility sd")
 
 
 # participant mean amplitude sd
 subj_amplitude_sds = data.frame(post_samples$subj_amplitude_sd)
-names(subj_amplitude_sds) = c("condition1", "condition2")
+names(subj_amplitude_sds) = c("vision", "no_vision")
 subj_amplitude_sds %>%
-  gather(condition, value, condition1:condition2) -> subj_amplitude_sds
+  gather(condition, value, vision:no_vision) -> subj_amplitude_sds
 
 gg_amplitude_sds = get_violin(subj_amplitude_sds, "participant amplitude sd")
 
 
 # population noise volatilty
 noise_volatilities = data.frame(post_samples$noise_volatility)
-names(noise_volatilities) = c("condition1", "condition2")
+names(noise_volatilities) = c("vision", "no_vision")
 noise_volatilities %>%
-  gather(condition, value, condition1:condition2) -> noise_volatilities
+  gather(condition, value, vision:no_vision) -> noise_volatilities
 
 gg_noise_volatilities = get_violin(noise_volatilities, "noise volatility")
 
 
 # population noise amplitude
 noise_amplitudes = data.frame(post_samples$noise_amplitude)
-names(noise_amplitudes) = c("condition1", "condition2")
+names(noise_amplitudes) = c("vision", "no_vision")
 noise_amplitudes %>%
-  gather(condition, value, condition1:condition2) -> noise_amplitudes
+  gather(condition, value, vision:no_vision) -> noise_amplitudes
 
 gg_noise_amplitudes = get_violin(noise_amplitudes, "noise amplitude")
 
 
 # participant noise volatilty sd
 noise_subj_volatility_sds = data.frame(post_samples$noise_subj_volatility_sd)
-names(noise_subj_volatility_sds) = c("condition1", "condition2")
+names(noise_subj_volatility_sds) = c("vision", "no_vision")
 noise_subj_volatility_sds %>%
-  gather(condition, value, condition1:condition2) -> noise_subj_volatility_sds
+  gather(condition, value, vision:no_vision) -> noise_subj_volatility_sds
 
 gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds, "noise participant volatility sd")
 
 
 # participant noise amplitude sd
 noise_subj_amplitude_sds = data.frame(post_samples$noise_subj_amplitude_sd)
-names(noise_subj_amplitude_sds) = c("condition1", "condition2")
+names(noise_subj_amplitude_sds) = c("vision", "no_vision")
 noise_subj_amplitude_sds %>%
-  gather(condition, value, condition1:condition2) -> noise_subj_amplitude_sds
+  gather(condition, value, vision:no_vision) -> noise_subj_amplitude_sds
 
 gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds, "noise participant amplitude sd")
 
@@ -3009,7 +3055,7 @@ for (si in 1:dim(subj_f)[2]) {
 subj_f_1 = subj_condition1 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 1
   )
 
@@ -3025,7 +3071,7 @@ for (si in 1:dim(subj_f)[2]) {
 subj_f_2 = subj_condition2 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 2
   )
 
@@ -3061,9 +3107,9 @@ subj_to_plot %>%
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_id_meansy, condition == "vision"), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id), size = 0.5, color = "gray50")+
-  ylab('position')+
-  xlab('time')+ 
+  geom_line(data = subset(df_id_meansy, condition == "vision"), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 0.5, color = "gray50")+
+  ylab('scaled position')+
+  xlab('normalized time')+ 
   ggtitle('vision')+
   theme_gray(base_size = 20)+
   theme(
@@ -3074,39 +3120,44 @@ subj_to_plot %>%
   ) ->p1
 print(p1)
 
-# figure out participant details
-p1cols = ggplot_build(p1)$data[[1]]
 
-# just pick one subject
-subj_to_plot %>%
-  group_by(id) %>%
-  dplyr::summarise(mins = min(med_1)) %>%
-  dplyr::summarise(idx = which.min(mins))
+# NOTE: stan id and df id will not necessarily match (some participant numbers removed)
 
-subj_to_plot %>%
-  dplyr::filter(id == 11, time >=8, time <=10) -> subj_to_plot_11
-
-p1cols %>%
-  dplyr::filter(group ==11, x == 1)
-
-subj_to_plot_11 %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med_1), color = '#00BFC4', size = 2)+
-  geom_line(aes(x=time, y=hi95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-  geom_line(aes(x=time, y=lo95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-  geom_line(data = subset(df_id_meansy, condition == "vision" & id == 11 & time_lores/bin_width+1 >=8 & time_lores/bin_width+1 <=10), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
-  ylab('')+
-  xlab('')+ 
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , axis.ticks = element_line(size = 0)
-    , axis.text = element_blank()
-    , legend.position = "none"
-    , panel.border = element_rect(size = 2, fill = NA)
-    , panel.background = element_rect(fill = "white", color = "black")
-  ) 
+# # figure out participant details
+# p1cols = ggplot_build(p1)$data[[1]]
+# 
+# # just pick one subject
+# subj_to_plot %>%
+#   group_by(id) %>%
+#   dplyr::summarise(mins = min(med_1)) %>%
+#   dplyr::summarise(idx = which.min(mins))
+# 
+# lo=0.5
+# hi=0.7
+# subj_to_plot %>%
+#   dplyr::filter(id == 11, time >=lo, time <=hi) -> subj_to_plot_11
+# 
+# p1cols %>%
+#   dplyr::filter(group ==11, x == 1)
+# 
+# subj_to_plot_11 %>%
+#   ggplot()+
+#   geom_line(aes(x=time, y=med_1), color = '#00BFC4', size = 2)+
+#   geom_line(aes(x=time, y=hi95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
+#   geom_line(aes(x=time, y=lo95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
+#   geom_line(data = subset(df_id_meansy, condition == "vision" & id == 11 & time_lores >=lo & time_lores <=hi), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
+#   ylab('')+
+#   xlab('')+ 
+#   theme_gray(base_size = 20)+
+#   theme(
+#     panel.grid.major = element_line(size = 0)
+#     , panel.grid.minor = element_line(size = 0)
+#     , axis.ticks = element_line(size = 0)
+#     , axis.text = element_blank()
+#     , legend.position = "none"
+#     , panel.border = element_rect(size = 2, fill = NA)
+#     , panel.background = element_rect(fill = "white", color = "black")
+#   ) 
 
 # condition 2
 subj_to_plot %>%
@@ -3114,9 +3165,9 @@ subj_to_plot %>%
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_id_meansy, condition == "no_vision"), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id ),size = 0.5, color = "gray50")+
-  ylab('position')+
-  xlab('time')+ 
+  geom_line(data = subset(df_id_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_avg, group = id ),size = 0.5, color = "gray50")+
+  ylab('scaled position')+
+  xlab('normalized time')+ 
   ggtitle('no vision')+
   theme_gray(base_size = 20)+
   theme(
@@ -3127,39 +3178,39 @@ subj_to_plot %>%
   ) -> p2
 print(p2)
 
-# figure out participant details
-p2cols = ggplot_build(p2)$data[[1]]
-
-# just pick one subject
-subj_to_plot %>%
-  group_by(id) %>%
-  dplyr::summarise(mins = min(med_2)) %>%
-  dplyr::summarise(idx = which.min(mins))
-
-subj_to_plot %>%
-  dplyr::filter(id == 6, time >=1, time <=3) -> subj_to_plot_6
-
-p1cols %>%
-  dplyr::filter(group ==6, x == 1)
-
-subj_to_plot_6 %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med_2), color = '#7CAE00', size = 2)+
-  geom_line(aes(x=time, y=hi95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-  geom_line(aes(x=time, y=lo95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-  geom_line(data = subset(df_id_meansy, condition == "no_vision" & id == 6 & time_lores/bin_width+1 >=1 & time_lores/bin_width+1 <=3), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
-  ylab('')+
-  xlab('')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , axis.ticks = element_line(size = 0)
-    , axis.text = element_blank()
-    , legend.position = "none"
-    , panel.border = element_rect(size = 2, fill = NA)
-    , panel.background = element_rect(fill = "white", color = "black")
-  ) 
+# # figure out participant details
+# p2cols = ggplot_build(p2)$data[[1]]
+# 
+# # just pick one subject
+# subj_to_plot %>%
+#   group_by(id) %>%
+#   dplyr::summarise(mins = min(med_2)) %>%
+#   dplyr::summarise(idx = which.min(mins))
+# 
+# subj_to_plot %>%
+#   dplyr::filter(id == 6, time >=1, time <=3) -> subj_to_plot_6
+# 
+# p1cols %>%
+#   dplyr::filter(group ==6, x == 1)
+# 
+# subj_to_plot_6 %>%
+#   ggplot()+
+#   geom_line(aes(x=time, y=med_2), color = '#7CAE00', size = 2)+
+#   geom_line(aes(x=time, y=hi95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
+#   geom_line(aes(x=time, y=lo95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
+#   geom_line(data = subset(df_id_meansy, condition == "no_vision" & id == 6 & time_lores/bin_width+1 >=1 & time_lores/bin_width+1 <=3), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
+#   ylab('')+
+#   xlab('')+
+#   theme_gray(base_size = 20)+
+#   theme(
+#     panel.grid.major = element_line(size = 0)
+#     , panel.grid.minor = element_line(size = 0)
+#     , axis.ticks = element_line(size = 0)
+#     , axis.text = element_blank()
+#     , legend.position = "none"
+#     , panel.border = element_rect(size = 2, fill = NA)
+#     , panel.background = element_rect(fill = "white", color = "black")
+#   ) 
 
 
 
@@ -3183,7 +3234,7 @@ for (si in 1:dim(noise_subj_f)[2]) {
 noise_subj_f_1 = noise_subj_condition1 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 1
   )
 
@@ -3199,7 +3250,7 @@ for (si in 1:dim(noise_subj_f)[2]) {
 noise_subj_f_2 = noise_subj_condition2 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 2
   )
 
@@ -3241,9 +3292,9 @@ noise_subj_to_plot %>%
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_biny, condition == "vision"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
+  geom_line(data = subset(noise_df_long_biny, condition == "vision"), aes(x=time_lores, y=SD, group = id), size = 0.5, color = "gray50")+
   ylab('log standard deviation')+
-  xlab('time')+
+  xlab('normalized time')+
   ggtitle('vision')+
   theme_gray(base_size = 20)+
   theme(
@@ -3258,9 +3309,9 @@ noise_subj_to_plot %>%
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_biny, condition == "no_vision"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
+  geom_line(data = subset(noise_df_long_biny, condition == "no_vision"), aes(x=time_lores, y=SD, group = id), size = 0.5, color = "gray50")+
   ylab('log standard deviation')+
-  xlab('time')+
+  xlab('normalized time')+
   ggtitle('no vision')+
   theme_gray(base_size = 20)+
   theme(
@@ -3293,7 +3344,7 @@ condition1$sample = 1:nrow(condition1)
 f_1 = condition1 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 1
   )
 
@@ -3303,7 +3354,7 @@ condition2$sample = 1:nrow(condition2)
 f_2 = condition2 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 2
   )
 
@@ -3337,9 +3388,9 @@ to_plot %>%
   geom_line(aes(x=time, y=med_1), color = "turquoise")+
   geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "turquoise")+
   geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "turquoise")+
-  geom_line(data=subset(df_condition_meansy, condition == "vision"), aes(x=time_lores/bin_width+1, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
-  ylab('position')+
-  xlab('time')+
+  geom_line(data=subset(df_condition_meansy, condition == "vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
+  ylab('scaled position')+
+  xlab('normalized time')+
   ggtitle('vision')+
   theme_gray(base_size = 20)+
   theme(
@@ -3354,9 +3405,9 @@ to_plot %>%
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
   geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
-  geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores/bin_width+1, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
-  ylab('position')+
-  xlab('time')+
+  geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
+  ylab('scaled position')+
+  xlab('normalized time')+
   ggtitle('no vision')+
   theme_gray(base_size = 20)+
   theme(
@@ -3375,10 +3426,10 @@ to_plot %>%
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
   geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
-  annotate("text", label = "vision", x = 3, y = -0.15, color = "turquoise")+
-  annotate("text", label = "no vision", x = 9, y = -1.25, color = "red")+
-  ylab('position')+
-  xlab('time')+
+  annotate("text", label = "vision", x = 3/15, y = -0.15, color = "turquoise")+
+  annotate("text", label = "no vision", x = 8/15, y = -1.25, color = "red")+
+  ylab('scaled position')+
+  xlab('normalized time')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3386,6 +3437,39 @@ to_plot %>%
     , panel.background = element_rect(fill = "white", color = "black")
   )
 
+# summarize to get difference
+f_sum %>%
+  dplyr::group_by(sample, time) %>%
+  dplyr::summarise(
+    effect = condition1-condition2
+  ) -> f_sum_effect
+
+to_plot_effect = f_sum_effect %>%
+  dplyr::group_by(
+    time
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(effect)
+    , lo95_1 = quantile(effect,.025)
+    , hi95_1 = quantile(effect,.975)
+    , lo50_1 = quantile(effect,.25)
+    , hi50_1 = quantile(effect,.75)
+  )
+
+to_plot_effect %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = "purple")+
+  geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "purple")+
+  geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "purple")+
+  ylab('scaled position effect (vision - no-vision)')+
+  xlab('normalized time')+
+  geom_hline(yintercept = 0)+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
 
 
 # Noise ----
@@ -3400,7 +3484,7 @@ noise_condition1$sample = 1:nrow(noise_condition1)
 noise_f_1 = noise_condition1 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 1
   )
 
@@ -3410,7 +3494,7 @@ noise_condition2$sample = 1:nrow(noise_condition2)
 noise_f_2 = noise_condition2 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 2
   )
 
@@ -3450,7 +3534,7 @@ noise_to_plot %>%
   geom_line(aes(x=time, y=med_1), color = "turquoise")+
   geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "turquoise")+
   geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "turquoise")+
-  geom_line(data=subset(subj_noise, condition == "vision"), aes(x=time_lores/bin_width+1, y=avg_SD), size = 0.5, color = "gray50")+
+  geom_line(data=subset(subj_noise, condition == "vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
   ylab('log standard deviation')+
   xlab('time')+
   ggtitle('vision')+
@@ -3467,7 +3551,7 @@ noise_to_plot %>%
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_line(aes(x=time, y=hi95_2), linetype = "dashed", color = "red")+
   geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
-  geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores/bin_width+1, y=avg_SD), size = 0.5, color = "gray50")+
+  geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
   ylab('log standard deviation')+
   xlab('time')+
   ggtitle('no vision')+
@@ -3490,8 +3574,8 @@ noise_to_plot %>%
   geom_line(aes(x=time, y=lo95_2), linetype = "dashed", color = "red")+
   ylab('log standard deviation')+
   xlab('time')+
-  annotate("text", label = "vision", x = 2, y = -1.0, color = "turquoise")+
-  annotate("text", label = "no vision", x = 4, y = -2.5, color = "red")+
+  annotate("text", label = "vision", x = 2/15, y = -1.0, color = "turquoise")+
+  annotate("text", label = "no vision", x = 4/15, y = -2.5, color = "red")+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3500,5 +3584,38 @@ noise_to_plot %>%
     , panel.background = element_rect(fill = "white", color = "black")
   )
 
+# summarize to get difference
+noise_f_sum %>%
+  dplyr::group_by(sample, time) %>%
+  dplyr::summarise(
+    effect = condition1-condition2
+  ) -> noise_f_sum_effect
+
+noise_to_plot_effect = noise_f_sum_effect %>%
+  dplyr::group_by(
+    time
+  ) %>%
+  dplyr::summarise(
+    med_1 = median(effect)
+    , lo95_1 = quantile(effect,.025)
+    , hi95_1 = quantile(effect,.975)
+    , lo50_1 = quantile(effect,.25)
+    , hi50_1 = quantile(effect,.75)
+  )
+
+noise_to_plot_effect %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = "purple")+
+  geom_line(aes(x=time, y=hi95_1), linetype = "dashed", color = "purple")+
+  geom_line(aes(x=time, y=lo95_1), linetype = "dashed", color = "purple")+
+  ylab('log standard deviation effect (vision - no-vision)')+
+  xlab('normalized time')+
+  geom_hline(yintercept = 0)+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
 
 
