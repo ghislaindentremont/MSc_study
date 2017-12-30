@@ -2308,126 +2308,132 @@ ezPlot(
 ####               Spline Method                    ####
 ########################################################
 
-num_samples = 200
+# num_samples = 200
+# 
+# df_spline = ddply(
+#   .data = df_long_trim
+#   , .variables = .(pilot, id, condition, trial, coordinate)
+#   , .fun = function(x){
+#     temp = smooth.spline(x$zero_time, x$centered_position)  # 4th order (i.e. cubic)
+#     pred = predict(temp, seq(min(temp$x), max(temp$x), length.out = num_samples))
+# 
+#     return(data.frame(pred_x = pred$x, pred_y = pred$y))
+#   }
+# )
+# 
+# # normalize function values (0 an 1)
+# df_spline %>%
+#   dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
+#   dplyr::mutate(
+#     # NOTE: this normalization is not the same as Chapman and Gallivan
+#     # They get equally spaced points along the primary movement axis 
+#     norm_y = (pred_y-min(pred_y))/(max(pred_y)-min(pred_y))
+#     , norm_x = 1:length(pred_y)
+#   ) -> df_spline
+# 
+# # only keep normalized data for 'y' variable 
+# df_spline$value = df_spline$pred_y
+# df_spline[df_spline$coordinate == "y_inter",]$value = df_spline[df_spline$coordinate == "y_inter",]$norm_y
+# 
+# # average over trials
+# df_spline %>%
+#   dplyr::group_by(pilot, id, condition, coordinate, norm_x) %>%
+#   dplyr::summarize(
+#     value = mean(value)
+#   ) -> df_spline_avg
+# 
+# # select only primary movement axis
+# df_spline_avg_y = df_spline_avg %>% dplyr::filter(coordinate == "y_inter")
+# 
+# # spread to take difference wave
+# df_spline_avg_y %>%
+#   spread(condition, value) -> df_spline_effect
+# 
+# # calculate effect of vision condition
+# df_spline_effect$v_minus_nv = df_spline_effect$vision - df_spline_effect$no_vision
+# 
+# # get group averages
+# df_spline_effect %>%
+#   dplyr::group_by(norm_x) %>%
+#   dplyr::summarise(
+#     M = mean(v_minus_nv)
+#     , SD = sd(v_minus_nv)
+#     , SE = SD/sqrt(length(v_minus_nv))
+#   ) -> df_spline_effect_avg
+# 
+# # plot
+# df_spline_effect_avg %>%
+#   ggplot(aes(x=norm_x, y=M))+
+#   geom_line()+
+#   geom_errorbar(aes(ymin=M-SE*2, ymax=M+SE*2))+
+#   xlab("time index")+
+#   ylab("y normalized position effect (vision - no-vision)")
+# 
+# 
+# # Plot 2D Waveforms ----
+# # trial-wise
+# df_spline %>%
+#   dplyr::select(-c(pred_x, pred_y, norm_y)) %>%
+#   spread(coordinate, value) -> df_2D
+# 
+# plot_2D = function(ids_use) {
+#   df_2D %>%
+#     dplyr::filter(as.numeric(id) %in% ids_use) %>%
+#     ggplot(aes(x=x_inter, y=y_inter, group=trial, color=trial))+
+#     geom_path()+
+#     facet_grid(condition~id)+
+#     xlab("x position")+
+#     ylab("normalized y position")
+# }
+# 
+# plot_2D(1:10)
+# plot_2D(11:20)
+# plot_2D(21:33)
+# 
+# # id averages
+# df_spline_avg %>%
+#   spread(coordinate, value) -> df_2D_avg
+# 
+# # overhead view
+# df_2D_avg %>%
+#   ggplot(aes(x=x_inter, y=y_inter, group=id, color=id))+
+#   geom_path()+
+#   facet_grid(.~condition)+
+#   xlab("x position")+
+#   ylab("normalized y position")
+# 
+# # side view
+# df_2D_avg %>%
+#   ggplot(aes(x=y_inter, y=z_inter, group=id, color=id))+
+#   geom_path()+
+#   facet_grid(.~condition)+
+#   xlab("normalized y position")+
+#   ylab("z position")
+# 
+# # group averages
+# df_spline_avg %>%
+#   dplyr::group_by(condition, coordinate, norm_x) %>%
+#   dplyr::summarize(
+#     value = mean(value)
+#   ) -> df_spline_avg_group
+# 
+# df_spline_avg_group %>%
+#   spread(coordinate, value) -> df_2D_avg_group
+# 
+# # overhead view
+# df_2D_avg_group %>%
+#   ggplot(aes(x=x_inter, y=y_inter, group=condition, color=condition))+
+#   geom_path()+
+#   xlab("x position")+
+#   ylab("normalized y position")
+# 
+# # side view
+# df_2D_avg_group %>%
+#   ggplot(aes(x=y_inter, y=z_inter, group=condition, color=condition))+
+#   geom_path()+
+#   xlab("normalized y position")+
+#   ylab("z position")
 
-df_spline = ddply(
-  .data = df_long_trim
-  , .variables = .(pilot, id, condition, trial, coordinate)
-  , .fun = function(x){
-    temp = smooth.spline(x$zero_time, x$centered_position)  # 4th order (i.e. cubic)
-    pred = predict(temp, seq(min(temp$x), max(temp$x), length.out = num_samples))
-
-    return(data.frame(pred_x = pred$x, pred_y = pred$y))
-  }
-)
-
-# normalize function values (0 an 1)
-df_spline %>%
-  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
-  dplyr::mutate(
-    norm_y = (pred_y-min(pred_y))/(max(pred_y)-min(pred_y))
-    , norm_x = 1:length(pred_y)
-  ) -> df_spline
-
-# average over trials
-df_spline %>%
-  dplyr::group_by(pilot, id, condition, coordinate, norm_x) %>%
-  dplyr::summarize(
-    norm_y = mean(norm_y)
-  ) -> df_spline_avg
-
-# select only primary movement axis
-df_spline_avg_y = df_spline_avg %>% dplyr::filter(coordinate == "y_inter")
-
-# spread to take difference wave
-df_spline_avg_y %>%
-  spread(condition, norm_y) -> df_spline_effect 
-
-# calculate effect of vision condition
-df_spline_effect$v_minus_nv = df_spline_effect$vision - df_spline_effect$no_vision
-
-# get group averages 
-df_spline_effect %>% 
-  dplyr::group_by(norm_x) %>%
-  dplyr::summarise(
-    M = mean(v_minus_nv)
-    , SD = sd(v_minus_nv)
-    , SE = SD/sqrt(length(v_minus_nv))
-  ) -> df_spline_effect_avg
-
-# plot
-df_spline_effect_avg %>%
-  ggplot(aes(x=norm_x, y=M))+
-  geom_line()+
-  geom_errorbar(aes(ymin=M-SE, ymax=M+SE))+
-  xlab("time index")+
-  ylab("y normalized position effect (vision - no-vision)")
-
-
-# Plot 2D Waveforms ----
-# trial-wise
-df_spline %>%
-  dplyr::select(-c(pred_x, pred_y)) %>%
-  spread(coordinate, norm_y) -> df_2D
-
-plot_2D = function(ids_use) {
-  df_2D %>%
-    dplyr::filter(as.numeric(id) %in% ids_use) %>%
-    ggplot(aes(x=x_inter, y=y_inter, group=trial, color=trial))+
-    geom_path()+
-    facet_grid(condition~id)+
-    xlab("normalized x position")+
-    ylab("normalized y position")
-}
-
-plot_2D(1:10)
-plot_2D(11:20)
-plot_2D(21:33)
-
-# id averages 
-df_spline_avg %>%
-  spread(coordinate, norm_y) -> df_2D_avg
-
-df_2D_avg %>%
-  ggplot(aes(x=x_inter, y=y_inter, group=id, color=id))+
-  geom_path()+
-  facet_grid(.~condition)+
-  xlab("normalized x position")+
-  ylab("normalized y position")
-
-# group averages
-df_spline_avg %>%
-  dplyr::group_by(condition, coordinate, norm_x) %>%
-  dplyr::summarize(
-    norm_y = mean(norm_y)
-  ) -> df_spline_avg_group
-
-df_spline_avg_group %>%
-  spread(coordinate, norm_y) -> df_2D_avg_group
-
-df_2D_avg_group %>%
-  ggplot(aes(x=x_inter, y=y_inter, group=condition, color=condition))+
-  geom_path()+
-  xlab("normalized x position")+
-  ylab("normalized y position")
-
-
-# Run fda.usc Functional Anova ----
-# transform fitted data into proper matrix form
-df_spline_mat = matrix(df_spline_avg_y$norm_y, nrow=n*2, ncol=num_samples, byrow=T)
-
-# transform fitted data matrix into fdata object
-fdata_y = fdata(df_spline_mat)
-
-# get condition for each curve
-df_spline_avg_y %>%
-  dplyr::group_by(pilot, id, condition) %>%
-  dplyr::summarise(
-    group = unique(condition)
-  ) -> df_spline_groups
-
-# run functional anova 
-anova.onefactor(fdata_y, df_spline_groups$group, plot=T, verbose=T)
 
 
 # For MATLAB ----
@@ -2448,6 +2454,91 @@ mat_long_trim = as.matrix(df_for_matlab[,c("id", "condition", "trial", "y_inter"
 
 # save matrix as .mat file 
 write.csv(mat_long_trim, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/FDA/mat_long_trim.csv")
+
+
+# From MATLAB ----
+filename = '/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_results/fanovan'
+
+# p-values
+px = read.csv(sprintf('%s/px.csv', filename), header = F)
+names(px) = c("p_value")
+py = read.csv(sprintf('%s/py.csv', filename), header = F)
+names(py) = c("p_value")
+pz = read.csv(sprintf('%s/pz.csv', filename), header = F)
+names(pz) = c("p_value")
+
+# x
+x_nv = read.csv(sprintf('%s/x_nv.csv', filename), header = F)
+names(x_nv) = c("x")
+x_nv$condition = "no_vision"
+x_v = read.csv(sprintf('%s/x_v.csv', filename), header = F)
+names(x_v) = c("x")
+x_v$condition = "vision"
+
+# y
+y_nv = read.csv(sprintf('%s/y_nv.csv', filename), header = F)
+names(y_nv) = c("y")
+y_nv$condition = "no_vision"
+y_v = read.csv(sprintf('%s/y_v.csv', filename), header = F)
+names(y_v) = c("y")
+y_v$condition = "vision"
+
+# z
+z_nv = read.csv(sprintf('%s/z_nv.csv', filename), header = F)
+names(z_nv) = c("z")
+z_nv$condition = "no_vision"
+z_v = read.csv(sprintf('%s/z_v.csv', filename), header = F)
+names(z_v) = c("z")
+z_v$condition = "vision"
+
+# MSEs
+x_MSE = read.csv(sprintf('%s/msx.csv', filename), header = F)
+names(x_MSE) = c("mse")
+y_MSE = read.csv(sprintf('%s/msy.csv', filename), header = F)
+names(y_MSE) = c("mse")
+z_MSE = read.csv(sprintf('%s/msz.csv', filename), header = F)
+names(z_MSE) = c("mse")
+
+
+# create data frames 
+nv = cbind(z = z_nv$z, y = y_nv$y, x_nv)
+v = cbind(z = z_v$z, y = y_v$y, x_v)
+
+fanovan =  rbind(nv, v)
+
+# when is it significant?
+px$sig = px$p_value < 0.05
+py$sig = py$p_value < 0.05
+pz$sig = pz$p_value < 0.05
+
+# add to fanovan
+fanovan$px_sig = px$sig
+fanovan$py_sig = py$sig
+fanovan$pz_sig = pz$sig
+
+# MSEs
+fanovan$x_SE = sqrt(x_MSE$mse/n)
+fanovan$y_SE = sqrt(y_MSE$mse/n)
+fanovan$z_SE = sqrt(z_MSE$mse/n)
+
+# overhead view 
+fanovan %>%
+  ggplot()+
+  geom_path(aes(x=y, y=x, group=condition, color=condition))+
+  geom_area(aes(x=y, y=as.numeric(px_sig)*max(x)), alpha = 0.2)+
+  geom_ribbon(aes(x=y, ymin=x-x_SE*2, ymax=x+x_SE*2, group=condition, fill=condition), alpha = 0.2)+
+  xlab("normalized y position")+
+  ylab("x position") +
+  coord_flip()
+
+# side view
+fanovan %>%
+  ggplot()+
+  geom_path(aes(x=y, y=z, group=condition, color=condition))+
+  geom_area(aes(x=y, y=as.numeric(pz_sig)*max(z)), alpha = 0.2)+
+  geom_ribbon(aes(x=y, ymin=z-z_SE*2, ymax=z+z_SE*2, group=condition, fill=condition), alpha = 0.2)+
+  xlab("normalized y position")+
+  ylab("z position") 
 
 
 
