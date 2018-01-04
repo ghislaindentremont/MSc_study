@@ -60,15 +60,10 @@ group{2} = group_2;
 
 toNormalize = 1:length(data); 
 normalizeFrames = 200;
-normalizeType = 3;
+normalizeType = 1;
 frameRate = 200;
 
 normalizedReach = normalizeFDA(data,toNormalize,normalizeFrames,normalizeType,frameRate);
-
-% plot a few trials
-% IT IS A STRAIGHT LINE BECAUSE X-AXIS IS INDEX, NOT TIME
-trial = normalizedReach{1,1}
-plot(trial(:,2))
 
 %% RM FANOVA
 
@@ -133,7 +128,7 @@ plot(mean(meansy(idyv,:)),'k','linewidth',2);
 
 
 %% Write Results
-cd '/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_results/fanovan'
+cd '/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_results/fanovan_norm_time'
 
 % no-vision trajectories
 csvwrite('x_nv.csv', mean(meansx(idynv,:))')
