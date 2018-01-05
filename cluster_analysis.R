@@ -1,6 +1,5 @@
 # Upload stan_data ----
-load("data_for_stan_effect_15.RData")
-
+load("data_for_stan_1_05.RData")
 
 
 # Load Packages ----
@@ -17,14 +16,14 @@ mod = rstan::stan_model("gp_regression.stan")
 post = sampling(
  mod
   , data = data_for_stan
-  , iter = 300
+  , iter = 500
   , init = 0
   , chains = 16
   , cores = 16
   , verbose = T
   , refresh = 1
   , control = list(
-    max_treedepth = 17
+    max_treedepth = 15
     , adapt_delta = 0.99  
   )  
   , include = F
@@ -43,6 +42,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'post_300_15_mtd17_effect.rdata'
+  , file = 'post_1_05.rdata'
 )
 

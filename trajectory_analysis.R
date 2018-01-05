@@ -1333,6 +1333,7 @@ plot_trim_grand_avg("z_inter", "acceleration_grand_avg", "z acceleration (mm/s^2
 
 
 
+
 ##########################################################
 ####            Normalized Waveforms                  ####
 ##########################################################
@@ -2699,6 +2700,7 @@ lines(fanovan_norm_time[1:200,]$pz_val, col = "blue")
 
 
 
+
 ########################################################
 ####        Gaussian Process Regression             ####
 ########################################################
@@ -2710,7 +2712,7 @@ df_long_trim %>%
   dplyr::filter(coordinate == "y_inter") -> df_long_trimy
 
 # specify bin width
-bin_width = 1/14
+bin_width = 1/14  # simulation is 1/15 (so 16 time points)
 
 # normalize time
 df_long_trimy %>%
@@ -2832,7 +2834,7 @@ volatilities = 15
 Sigmas = matrix(0, n_x, n_x)
 for (i in 1:n_x){
   for (j in 1:n_x){
-    Sigmas[i, j] = amplitudes^2*exp(-volatilities^2*(1/2)*(x[i] - x[j])^2)
+    Sigmas[i, j] = amplitudes^2*exp(-volatilities^2*(1/2)*(xx[i] - xx[j])^2)
   }
 }
 
@@ -2947,8 +2949,8 @@ data_for_stan = list(
   , subj_obs = subj_obs
 )
 
-# package for cluster
-save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/data_for_stan_effect_15.RData")
+# # package for cluster
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/data_for_stan_effect_15.RData")
 
 # # see 'cluster_analysis'
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_study/gp_regression.stan")
@@ -3297,7 +3299,7 @@ noise_subj_volatility_sds %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> noise_subj_volatility_sds_e
 
-gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "noise participant volatility sd", hline = T)
+gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "noise participant volatility sd effect (vision - no-vision)", hline = T)
 
 
 
@@ -3317,13 +3319,13 @@ noise_subj_amplitude_sds %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> noise_subj_amplitude_sds_e
 
-gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "noise participant amplitude sd", hline = T)
+gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "noise participant amplitude sd effect (vision - no-vision)", hline = T)
+
 
 
 
 
 ####   Subject Level
-
 
 # Mean ----
 
