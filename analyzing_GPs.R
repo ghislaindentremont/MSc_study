@@ -104,13 +104,15 @@ df_long_sim_grand_avg %>%
 # create kinematic marker-like variables
 # what time points should be chosen? 
 # for real data they all are before slightly past the half way mark
+TT = c(0.2, 0.4, 0.6)
+
 df_long_sim %>%
   dplyr::group_by(id, condition, trial, coordinate) %>%
   dplyr::summarize(
-    T1 = position[round(time,1) ==  0.4]
-    , T2 = position[round(time,1) == 0.6]
-    , T3 = position[round(time,1) == 0.8]
-    , END = position[round(time,1) == 1]
+    T1 = position[time ==  TT[1]]
+    , T2 = position[time == TT[2]]
+    , T3 = position[time == TT[3]]
+    , END = position[time == 1]
   ) -> df_rsq_lm
 
 # for each participant and each condition extract R^2
@@ -170,6 +172,247 @@ ezPlot(
 )
 
 # NOTE: unclear how to interpret R^2 results for these fake data
+
+
+
+
+
+
+
+##########################################################
+####          Spatial Variability Profiles            ####
+##########################################################
+
+df_long_sim %>%
+  dplyr::group_by(id, condition, coordinate, time) %>%
+  dplyr::summarise(spat_var = sd(position)) -> df_long_spat_var
+
+# function to plot spatial variability
+plot_spat_var = function(ids_use, dv, y_label) {
+  
+  df_long_spat_var %>%
+    dplyr::filter(as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=time, y=spat_var, group=id, color=id), alpha = 0.5, size = .5)+
+    xlab("normalized time")+
+    ylab(y_label)+
+    facet_grid(.~condition) %>% print()
+}
+
+# Y
+plot_spat_var(1:10, "y_inter", "y spatial variability (sd)")
+plot_spat_var(11:20, "y_inter", "y spatial variability (sd)")
+
+# grand averages 
+df_long_spat_var %>%
+  dplyr::group_by(condition, coordinate, time) %>%
+  dplyr::summarise(spat_var_avg = mean(spat_var)) -> df_long_spat_var_avg  
+
+
+# plot grand averages 
+df_long_spat_var_avg %>%
+  ggplot()+
+  geom_line(aes(x=time, y=spat_var_avg, group=condition, color=condition))+
+  xlab("time")+
+  ylab("position") %>% print()
+
+
+# ANOVA ----
+df_spat_var = df_long_spat_var
+
+df_spat_var %>%
+  dplyr::group_by(id, condition, coordinate) %>%
+  dplyr::summarize(
+    T1 = spat_var[time == TT[1]]
+    , T2 = spat_var[time == TT[2]]
+    , T3 = spat_var[time == TT[3]]
+    , END = spat_var[time == 1]
+  ) %>%
+  gather("kinematic_marker", "spatial_variability", T1:END) -> df_spat_var_anova
+
+# change factor order for plot
+df_spat_var_anova$kinematic_marker = factor(df_spat_var_anova$kinematic_marker, levels = c("T1", "T2", "T3", "END"))
+
+# Y ----
+df_yspat_var_anova = subset(df_spat_var_anova, coordinate == "y")
+
+ezANOVA(
+  df_yspat_var_anova
+  , dv = spatial_variability
+  , wid = id
+  , within = .(condition, kinematic_marker)
+)
+ezPlot(
+  df_yspat_var_anova
+  , dv = spatial_variability
+  , wid = id
+  , within = .c(condition, kinematic_marker)
+  , x = kinematic_marker
+  , split = condition
+  , do_bar = F
+  , y_lab = "y spatial variability (sd)"
+  , x_lab = "kinematic marker"
+)
+
+
+
+
+########################################################
+####               Ellipsoid                        ####
+########################################################
+
+df_spat_var %>%
+  dplyr::select(id, condition, coordinate, time, spat_var) %>%
+  spread(coordinate, spat_var) -> df_ellipsoid
+
+# NOTE: we cannot do Ellipsoid in this 1D case 
+# NOTE: therefore, this is very similar to the spatial variability profile
+df_ellipsoid$volume = df_ellipsoid$y 
+
+# function to plot ellipsoid volumes
+plot_ellipsoids = function(ids_use, y_label) {
+  df_ellipsoid %>%
+    dplyr::filter(as.numeric(id) %in% ids_use) %>%
+    ggplot()+
+    geom_line(aes(x=time, y=volume, group=id, color=id), alpha = 0.5, size = .5)+
+    xlab("time")+
+    ylab(y_label)+
+    facet_grid(.~condition) %>% print()
+}
+
+# use function
+plot_ellipsoids(1:10, "volume (mm^3)")
+plot_ellipsoids(11:20, "volume (mm^3)")
+
+# run ANOVAs
+ezANOVA(
+  df_ellipsoid
+  , dv = volume
+  , wid = id
+  , within = .(condition, time)
+)
+ezPlot(
+  df_ellipsoid
+  , dv = volume
+  , wid = id
+  , within = .c(condition, time)
+  , x =  time
+  , split = condition
+  , do_bar = F
+  , y_lab = "volume (mm^3)"
+  , x_lab = "proportion of movement"
+)
+
+
+
+
+########################################################
+####               Spline Method                    ####
+########################################################
+
+round0 = function(x,z){
+  round(x/z,0)*z
+}
+
+# we cannot oversample because in this case we do not have that many samples 
+num_samples = 16
+
+# # NOTE: df_spline should be nearly identical to df_long_sim
+# # NOTE: in the case of time normalization with so few samples there is no point in this
+# df_spline = ddply(
+#   .data = df_long_sim
+#   , .variables = .(id, condition, trial, coordinate)
+#   , .fun = function(x){
+#     
+#     temp = smooth.spline(x$time, x$position)  # 4th order (i.e. cubic)
+#     
+#     the_bin_width = max(temp$x)/(num_samples-1)
+#     
+#     # between 0 and 1
+#     time_over = seq(0, max(temp$x), length.out = num_samples)
+#     
+#     time_round = unique(round0(time_over, the_bin_width))
+#     
+#     # actually get values
+#     pred = predict(temp, time_round)
+#     
+#     return(data.frame(time = pred$x, value = pred$y, norm_idx = 1:length(pred$x)))
+#   }
+# )
+
+df_spline = df_long_sim
+df_spline$norm_idx = 1:num_samples
+names(df_spline)[5] = c("value")
+
+# average over trials
+df_spline %>%
+  dplyr::group_by(id, condition, coordinate, norm_idx) %>%
+  dplyr::summarize(
+    value = mean(value)
+  ) -> df_spline_avg
+
+# average over participants
+df_spline_avg %>%
+  dplyr::group_by(condition, coordinate, norm_idx) %>%
+  dplyr::summarize(
+    value = mean(value)
+  ) -> df_spline_grand_avg
+
+# function
+df_spline_grand_avg %>%
+  ggplot()+
+  geom_line(aes(x=norm_idx, y=value, group=condition, color=condition))+
+  xlab("time")+
+  ylab("y position")
+
+# take difference 
+df_spline_avg %>%
+  dplyr::group_by(id, coordinate, norm_idx) %>%
+  dplyr::summarize(
+    effect = -diff(value)
+  ) -> df_spline_avg_effect
+
+# get sample size 
+n = length(unique(df_long_sim$id))
+
+# average over differences
+df_spline_avg_effect %>%
+  dplyr::group_by(coordinate, norm_idx) %>%
+  dplyr::summarize(
+    M = mean(effect)
+    , SD = sd(effect)
+    , SE = SD/sqrt(n)
+    , pval = (1-pt(abs(M/SE), n-1))*2  # two-sided
+    , CI_hi = M + SE*qt(1-0.025, n-1)
+    , CI_lo = M - SE*qt(1-0.025, n-1)
+  ) -> df_spline_grand_avg_effect
+
+# where is it significant?
+df_spline_grand_avg_effect %>% 
+  dplyr::mutate(
+    sigcheck = CI_lo > 0 | CI_hi < 0
+    , sig = pval < 0.05
+  ) -> df_spline_grand_avg_effect
+
+# check p-value calculation
+mean(df_spline_grand_avg_effect$sig == df_spline_grand_avg_effect$sigcheck)
+
+# function
+df_spline_grand_avg_effect %>%
+  ggplot()+
+  geom_line(aes(x=norm_idx, y=M), color = "purple")+
+  geom_ribbon(aes(x=norm_idx, ymin=CI_lo, ymax=CI_hi), fill = "purple", alpha=0.5)+
+  geom_hline(aes(yintercept = 0), linetype="dashed")+
+  geom_line(data=df_pop, aes(x = time/bin_width+1, y = effect), linetype = "longdash")+
+  xlab("time")+
+  ylab("y position effect (condition1 - condition2)")+
+  theme_gray(base_size = 20)+
+    theme(
+      panel.grid.major = element_line(size = 0)
+      , panel.grid.minor = element_line(size = 0)
+      , panel.background = element_rect(fill = "white", color = "black")
+    )
+
 
 
 
@@ -894,40 +1137,40 @@ subj_to_plot %>%
   ) ->p1
 print(p1)
 
-# figure out participant details
-p1cols = ggplot_build(p1)$data[[1]]
-
-# just pick one subject
-subj_to_plot %>%
-  group_by(id) %>%
-  dplyr::summarise(mins = min(med_1)) %>%
-  dplyr::summarise(idx = which.min(mins))
-
-subj_to_plot %>%
-  dplyr::filter(id == 11, time >=8, time <=10) -> subj_to_plot_11
-
-p1cols %>%
-  dplyr::filter(group ==11, x == 1)
-
-subj_to_plot_11 %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med_1), color = '#00BFC4', size = 2)+
-  geom_line(aes(x=time, y=hi95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-  geom_line(aes(x=time, y=lo95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-  geom_line(data = subset(df_long_sim_avg, condition == "condition1" & id == 11 & time/bin_width+1 >=8 & time/bin_width+1 <=10), aes(x=time/bin_width+1, y=position_avg, group = id), size = 2, color = "gray50")+
-  geom_line(data = subset(df_subj, id == 11 & time/bin_width+1 >= 8 & time/bin_width+1 <= 10), aes(x = time/bin_width+1, y = condition1, group = id), size = 2, linetype = "longdash")+
-  ylab('')+
-  xlab('')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , axis.ticks = element_line(size = 0)
-    , axis.text = element_blank()
-    , legend.position = "none"
-    , panel.border = element_rect(size = 2, fill = NA)
-    , panel.background = element_rect(fill = "white", color = "black")
-  )
+# # figure out participant details
+# p1cols = ggplot_build(p1)$data[[1]]
+# 
+# # just pick one subject
+# subj_to_plot %>%
+#   group_by(id) %>%
+#   dplyr::summarise(mins = min(med_1)) %>%
+#   dplyr::summarise(idx = which.min(mins))
+# 
+# subj_to_plot %>%
+#   dplyr::filter(id == 11, time >=8, time <=10) -> subj_to_plot_11
+# 
+# p1cols %>%
+#   dplyr::filter(group ==11, x == 1)
+# 
+# subj_to_plot_11 %>%
+#   ggplot()+
+#   geom_line(aes(x=time, y=med_1), color = '#00BFC4', size = 2)+
+#   geom_line(aes(x=time, y=hi95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
+#   geom_line(aes(x=time, y=lo95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
+#   geom_line(data = subset(df_long_sim_avg, condition == "condition1" & id == 11 & time/bin_width+1 >=8 & time/bin_width+1 <=10), aes(x=time/bin_width+1, y=position_avg, group = id), size = 2, color = "gray50")+
+#   geom_line(data = subset(df_subj, id == 11 & time/bin_width+1 >= 8 & time/bin_width+1 <= 10), aes(x = time/bin_width+1, y = condition1, group = id), size = 2, linetype = "longdash")+
+#   ylab('')+
+#   xlab('')+
+#   theme_gray(base_size = 20)+
+#   theme(
+#     panel.grid.major = element_line(size = 0)
+#     , panel.grid.minor = element_line(size = 0)
+#     , axis.ticks = element_line(size = 0)
+#     , axis.text = element_blank()
+#     , legend.position = "none"
+#     , panel.border = element_rect(size = 2, fill = NA)
+#     , panel.background = element_rect(fill = "white", color = "black")
+#   )
 
 # condition 2
 subj_to_plot %>%
@@ -950,40 +1193,40 @@ subj_to_plot %>%
   ) -> p2
 print(p2)
 
-# figure out participant details
-p2cols = ggplot_build(p2)$data[[1]]
-
-# just pick one subject
-subj_to_plot %>%
-  group_by(id) %>%
-  dplyr::summarise(mins = min(med_2)) %>%
-  dplyr::summarise(idx = which.min(mins))
-
-subj_to_plot %>%
-  dplyr::filter(id == 6, time >=1, time <=3) -> subj_to_plot_6
-
-p1cols %>%
-  dplyr::filter(group ==6, x == 1)
-
-subj_to_plot_6 %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med_2), color = '#7CAE00', size = 2)+
-  geom_line(aes(x=time, y=hi95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-  geom_line(aes(x=time, y=lo95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-  geom_line(data = subset(df_long_sim_avg, condition == "condition2" & id == 6 & time/bin_width+1 >=1 & time/bin_width+1 <=3), aes(x=time/bin_width+1, y=position_avg, group = id), size = 2, color = "gray50")+
-  geom_line(data = subset(df_subj, id == 6 & time/bin_width+1 >=1 & time/bin_width+1 <=3), aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash", size = 2)+
-  ylab('')+
-  xlab('')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , axis.ticks = element_line(size = 0)
-    , axis.text = element_blank()
-    , legend.position = "none"
-    , panel.border = element_rect(size = 2, fill = NA)
-    , panel.background = element_rect(fill = "white", color = "black")
-  )
+# # figure out participant details
+# p2cols = ggplot_build(p2)$data[[1]]
+# 
+# # just pick one subject
+# subj_to_plot %>%
+#   group_by(id) %>%
+#   dplyr::summarise(mins = min(med_2)) %>%
+#   dplyr::summarise(idx = which.min(mins))
+# 
+# subj_to_plot %>%
+#   dplyr::filter(id == 6, time >=1, time <=3) -> subj_to_plot_6
+# 
+# p1cols %>%
+#   dplyr::filter(group ==6, x == 1)
+# 
+# subj_to_plot_6 %>%
+#   ggplot()+
+#   geom_line(aes(x=time, y=med_2), color = '#7CAE00', size = 2)+
+#   geom_line(aes(x=time, y=hi95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
+#   geom_line(aes(x=time, y=lo95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
+#   geom_line(data = subset(df_long_sim_avg, condition == "condition2" & id == 6 & time/bin_width+1 >=1 & time/bin_width+1 <=3), aes(x=time/bin_width+1, y=position_avg, group = id), size = 2, color = "gray50")+
+#   geom_line(data = subset(df_subj, id == 6 & time/bin_width+1 >=1 & time/bin_width+1 <=3), aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash", size = 2)+
+#   ylab('')+
+#   xlab('')+
+#   theme_gray(base_size = 20)+
+#   theme(
+#     panel.grid.major = element_line(size = 0)
+#     , panel.grid.minor = element_line(size = 0)
+#     , axis.ticks = element_line(size = 0)
+#     , axis.text = element_blank()
+#     , legend.position = "none"
+#     , panel.border = element_rect(size = 2, fill = NA)
+#     , panel.background = element_rect(fill = "white", color = "black")
+#   )
 
 
 
@@ -1181,8 +1424,8 @@ to_plot %>%
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
   geom_line(data=subset(df_long_sim_grand_avg, condition == "condition1"), aes(x=time/bin_width+1, y=position_grand_avg), size = 0.5, color = "grey50")+
   geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition1), linetype = "longdash")+
-  ylab('scaled position')+
-  xlab('normalized time')+
+  ylab('position')+
+  xlab('time')+
   ggtitle('condition1')+
   theme_gray(base_size = 20)+
   theme(
@@ -1198,8 +1441,8 @@ to_plot %>%
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
   geom_line(data=subset(df_long_sim_grand_avg, condition == "condition2"), aes(x=time/bin_width+1, y=position_grand_avg), size = 0.5, color = "grey50")+
   geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition2), linetype = "longdash")+
-  ylab('scaled position')+
-  xlab('normalized time')+
+  ylab('position')+
+  xlab('time')+
   ggtitle('condition2')+
   theme_gray(base_size = 20)+
   theme(
@@ -1218,8 +1461,8 @@ to_plot %>%
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
   annotate("text", label = "condition1", x = 2, y = -0.15, color = "turquoise")+
   annotate("text", label = "condition2", x = 6, y = -0.75, color = "red")+
-  ylab('scaled position')+
-  xlab('normalized time')+
+  ylab('position')+
+  xlab('time')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1256,8 +1499,8 @@ to_plot_effect %>%
   geom_line(aes(x=time, y=med_1), color = "purple")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "purple", alpha=0.5)+
   geom_line(data=df_pop, aes(x = time/bin_width+1, y = effect), linetype = "longdash")+
-  ylab('scaled position effect (vision - no-vision)')+
-  xlab('normalized time')+
+  ylab('position effect (condition1 - condition2)')+
+  xlab('time')+
   geom_hline(yintercept = 0, linetype = "dashed")+
   theme_gray(base_size = 20)+
   theme(
@@ -1409,8 +1652,8 @@ noise_to_plot_effect %>%
   geom_line(aes(x=time, y=med_1), color = "purple")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "purple", alpha=0.5)+
   geom_line(data=df_pop_noise, aes(x=time/bin_width+1, y=effect), linetype = "longdash")+
-  ylab('log standard deviation effect (vision - no-vision)')+
-  xlab('normalized time')+
+  ylab('log standard deviation effect (condition1 - condition2)')+
+  xlab('time')+
   geom_hline(yintercept = 0, linetype = "dashed")+
   theme_gray(base_size = 20)+
   theme(
