@@ -2986,7 +2986,7 @@ data_for_stan = list(
 
 
 # load stan fit object that was computed in the cloud
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory\ Studies/MSc_results/post_300_15_mtd17.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory\ Studies/MSc_results/post_300_15_mtd17_effect.rdata")
 
 
 
@@ -3717,10 +3717,10 @@ to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1)+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1)+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1)+
+  # geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1)+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1)+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1)+
   ylab('scaled position')+
   xlab('normalized time')+
   ggtitle('no vision')+
@@ -3895,7 +3895,7 @@ noise_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
+  # geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
   ylab('log standard deviation')+
   xlab('time')+
   ggtitle('no vision')+
