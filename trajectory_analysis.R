@@ -79,8 +79,24 @@ dat$condition = factor(ifelse((dat$blocking == "vision" & (dat$block == 1 | dat$
 ####             Summarize Data                     ####
 ########################################################
 
+
+# Extract Demographic Info ----
 summary(dat)
 
+# participant count
+length(unique(dat$id))
+
+# median age and age range 
+ages = aggregate(age ~ id, data = dat, FUN = unique)
+range(ages$age)
+median(ages$age)
+
+# sex count 
+sexes = aggregate(sex ~ id, data = dat, FUN = unique)
+sum(sexes$sex == "male")
+
+
+# Create Functions ----
 plot_outcomes = function(ids_use, dv, xlabel) {
   
   dat$temp = dplyr::pull(dat, dv)
@@ -184,6 +200,13 @@ mm_per_pixel =  0.26458333333333
 # target is a dot
 target_diameter = 10
 target_size = mm_per_pixel * target_diameter
+target_area = (target_size/2)^2 * pi
+
+# what is the size of the fixation cross?
+# how long is an arm from center?
+fixation_arm = 20
+fixation_size = mm_per_pixel * fixation_arm
+fixation_area = fixation_size^2
 
 xdim = 1080 * mm_per_pixel
 ydim = 1920 * mm_per_pixel
@@ -193,6 +216,9 @@ yfixcoor = ydim*1/16
 
 xtargetcoor = xdim/2
 ytargetcoor = ydim*2/3
+
+# how far away is the target from the fixation cross?
+fix_target_dist = ytargetcoor - yfixcoor
 
 # now redefine touch screen fixation touches to be in interpretable frame of reference (0,0 in bottom left corner)
 dat$good_xfix = xdim - dat$yfix * mm_per_pixel
@@ -450,7 +476,7 @@ df_orig$pilot = factor(df_orig$pilot, levels = c("p", "e"), labels = c("pilot", 
 
 # Merge ---- 
 df = merge(df_orig, dat_clean)   # should merge based on block, trial, id ,and participant type
-rm(df_orig)
+# rm(df_orig)
 
 # the merge causes the order of frames to get messed up so we sort
 ptm = proc.time()
@@ -610,11 +636,11 @@ df$z2_na = ifelse(boolean_vector2, NA, df$z2)
 
 
 # Indentify Bad Trials ----
-# how many bad markers in a row will we tolerate
+# how many bad markers in close proximity will be tolerate?
 max_lost = 7
 max_lost_ms = max_lost * 1000/200
 
-# turn NAs (for any coordinate) into T
+# turn NAs (FOR ANY COORDINATE) into T
 df$isna = is.na(df$x_na) | is.na(df$y_na) | is.na(df$z_na)
 df$isna2 = is.na(df$x2_na) | is.na(df$y2_na) | is.na(df$z2_na)
 
@@ -662,7 +688,7 @@ df %>%
 # we get rid of trials that are bad with respect to both markers
 df %>% 
   dplyr::filter(!bad_trial, !bad_trial2) -> df_clean
-rm(df)
+# rm(df)
 
 # now we replace primary marker with secondary marker for bad trials
 df_clean$x_clean = ifelse(df_clean$bad_trial, df_clean$x2_na, df_clean$x_na)
@@ -732,7 +758,7 @@ proc.time() - ptm
 df_cleanest %>%
   dplyr::filter(is.na(x_inter) | is.na(x_inter) | is.na(x_inter)) %>%
   dplyr::group_by(pilot, id, condition) %>%
-  dplyr::summarize(count = length(unique(trial))) %>% print(n=n*2)
+  dplyr::summarize(count = length(unique(trial))) %>% print(n2=n2*2)
 
 # create function to plot new data frame
 plot_lines = function(ids_use, dv, ylimits, y_label) {
@@ -779,6 +805,17 @@ df_for_long %>%
 # how many participants are left?
 n=length(unique(df_for_long$id))
 n
+
+# Demographics ----
+# median age and age range 
+ages = aggregate(age ~ id, data = df_for_long, FUN = unique)
+range(ages$age)
+median(ages$age)
+
+# sex count 
+sexes = aggregate(sex ~ id, data = df_for_long, FUN = unique)
+sum(sexes$sex == "male")
+
 
 
 
@@ -1884,15 +1921,19 @@ df_outcomes %>%
     , CE_dir = mean(CE_dir)
   ) -> df_outcomes_avg
 
+df_outcomes_avg$condition = revalue(df_outcomes_avg$condition, c("no_vision"="NV", "vision" = "V"))
+df_outcomes_avg$blocking = revalue(df_outcomes_avg$blocking, c("no_vision"="NV", "vision" = "V"))
+
 # create function to fun ANOVAs and summarize data
-do_anovas = function(dv) {
+do_anovas = function(dv, YL, XL, SL) {
   df_outcomes_avg$temp = dplyr::pull(df_outcomes_avg, dv)
   ez_print = ezANOVA(
     df_outcomes_avg
     , dv = temp
     , wid = id
     , within = condition
-    , between = blocking
+    # , between = blocking
+    # , return_aov = T
   )
   print(ez_print)
   ezPlot(
@@ -1900,44 +1941,47 @@ do_anovas = function(dv) {
     , dv = temp
     , wid = id
     , within = condition
-    , between = blocking
+    # , between = blocking
     , x = condition
-    , split = blocking
-    , do_bar = F
+    # , split = blocking
+    , do_bar = T
+    , y_lab = YL
+    , x_lab = XL
+    , split_lab = SL
   )
 }
 
 
 # RT ----
-do_anovas("good_rt")
+do_anovas("good_rt", "RT (ms)", "Vision Condition", "Blocking")
 
 
 # MT ----
-do_anovas("good_movement_time")
+do_anovas("good_movement_time", "MT (ms)", "Vision Condition", "Blocking")
 
 
 # Response Time ----
-do_anovas("good_response_time")
+do_anovas("good_response_time", "Response Time (ms)", "Vision Condition", "Blocking")
 
 
 # Absolute (2D) Error ----
-do_anovas("target_error")
+do_anovas("target_error", "Target Error (mm)", "Vision Condition", "Blocking")
 
 
 # Constant Error (Amplitude) ----
-do_anovas("CE_amp")
+do_anovas("CE_amp",  "CE (amplitude; mm)", "Vision Condition", "Blocking")
 
 
 # Constant Error (Direction) ----
-do_anovas("CE_dir")
+do_anovas("CE_dir",  "CE (direction; mm)", "Vision Condition", "Blocking")
 
 
 # Variable Error (Amplitude) ----
-do_anovas("VE_amp")
+do_anovas("VE_amp",  "VE (amplitude; mm)", "Vision Condition", "Blocking")
 
 
 # Variable Error (Direction) ----
-do_anovas("VE_dir")
+do_anovas("VE_dir",  "VE (direction; mm)", "Vision Condition", "Blocking")
 
 
 
@@ -1948,6 +1992,9 @@ do_anovas("VE_dir")
 
 df_ykinematics = subset(kms_ids, coordinate == "y_inter")
 df_ykinematics$time_after_peak_velocity = 1 - df_ykinematics$time_peak_velocity
+
+df_ykinematics$condition = revalue(df_ykinematics$condition, c("no_vision"="NV", "vision" = "V"))
+df_ykinematics$blocking = revalue(df_ykinematics$blocking, c("no_vision"="NV", "vision" = "V"))
 
 ezANOVA(
   df_ykinematics
@@ -1964,7 +2011,10 @@ ezPlot(
   , between = blocking
   , x = condition
   , split = blocking
-  , do_bar = F
+  , do_bar = T
+  , y_lab = "TAPV (ms)"
+  , x_lab = "Vision Condition"
+  , split_lab = "Blocking"
 )
 
 
@@ -1987,7 +2037,7 @@ df_spat_var %>%
   ) -> df_spat_var
 
 df_spat_var %>%
-  dplyr::group_by(blocking, pilot, id, condition, coordinate) %>%
+  dplyr::group_by(pilot, id, condition, coordinate) %>%
   dplyr::summarize(
    PV = spat_var[norm_time == time_peak_velocity_round]
    , PA = spat_var[norm_time == time_peak_acceleration_round]
@@ -2002,24 +2052,28 @@ df_spat_var_anova$kinematic_marker = factor(df_spat_var_anova$kinematic_marker, 
 # Y ----
 df_yspat_var_anova = subset(df_spat_var_anova, coordinate == "y_inter")
 
+df_yspat_var_anova$condition = revalue(df_yspat_var_anova$condition, c("vision" = "V", "no_vision"="NV"))
+
+# change factor order
+df_yspat_var_anova$condition = factor(df_yspat_var_anova$condition, levels = c("V", "NV"))
+
 ezANOVA(
   df_yspat_var_anova
   , dv = spatial_variability
   , wid = id
   , within = .(condition, kinematic_marker)
-  # , between = blocking
 )
 ezPlot(
   df_yspat_var_anova
   , dv = spatial_variability
   , wid = id
   , within = .c(condition, kinematic_marker)
-  # , between = blocking
   , x = kinematic_marker
   , split = condition
-  , do_bar = F
-  , y_lab = "y spatial variability (sd)"
-  , x_lab = "kinematic marker"
+  , do_bar = T
+  , y_lab = "Spatial Variability (SD)"
+  , x_lab = "Kinematic Marker"
+  , split_lab = "Vision Condition"
 )
 
 
@@ -2029,7 +2083,7 @@ ezPlot(
 ########################################################
 
 df_spat_var %>%
-  dplyr::select(blocking, pilot, id, condition, coordinate, norm_time, spat_var) %>%
+  dplyr::select(pilot, id, condition, coordinate, norm_time, spat_var) %>%
   spread(coordinate, spat_var) -> df_ellipsoid
 
 df_ellipsoid$volume = 4/3 * pi * df_ellipsoid$x_inter * df_ellipsoid$y_inter * df_ellipsoid$z_inter
@@ -2050,25 +2104,33 @@ plot_ellipsoids(1:10, "volume (mm^3)")
 plot_ellipsoids(11:21, "volume (mm^3)")
 plot_ellipsoids(21:30, "volume (mm^3)")
 
+# change factor names
+df_ellipsoid$condition = revalue(df_ellipsoid$condition, c("vision" = "V", "no_vision"="NV"))
+
+# change factor order
+df_ellipsoid$condition = factor(df_ellipsoid$condition, levels = c("V", "NV"))
+
+# convert to factor
+df_ellipsoid$norm_time = factor(df_ellipsoid$norm_time)
+
 # run ANOVAs
 ezANOVA(
   df_ellipsoid
   , dv = volume
   , wid = id
   , within = .(condition, norm_time)
-  # , between = blocking
 )
 ezPlot(
   df_ellipsoid
   , dv = volume
   , wid = id
   , within = .c(condition, norm_time)
-  # , between = blocking
   , x =  norm_time
   , split = condition
-  , do_bar = F
-  , y_lab = "volume (mm^3)"
-  , x_lab = "proportion of movement"
+  , do_bar = T
+  , y_lab = "Volume (mm cubed)"
+  , x_lab = "Proportion of Movement"
+  , split_lab = "Vision Condition"
 )
 
 
@@ -2088,8 +2150,11 @@ df_rsq %>%
     , time_peak_deceleration_round = mround(time_peak_deceleration, 0.05)
   ) -> df_rsq
 
+# NOTE: rounding is not necessary - they are already rounded
+mean(df_rsq$time_peak_velocity == df_rsq$time_peak_velocity_round)
+
 df_rsq %>%
-  dplyr::group_by(blocking, pilot, id, condition, trial, coordinate) %>%
+  dplyr::group_by(pilot, id, condition, trial, coordinate) %>%
   dplyr::summarize(
     PV = norm_position[norm_time == time_peak_velocity_round]
     , PA = norm_position[norm_time == time_peak_acceleration_round]
@@ -2100,7 +2165,7 @@ df_rsq %>%
 # for each participant and each condition extract R^2
 df_rsq_anova2 = ddply(
   .data = df_rsq_lm
-  , .variables = .(blocking, pilot, id, condition, coordinate)
+  , .variables = .(pilot, id, condition, coordinate)
   , .fun = function(x) {
     m_PA = lm(END~PA, data=x)
     m_PV = lm(END~PV, data=x)
@@ -2110,12 +2175,12 @@ df_rsq_anova2 = ddply(
     id = unique(x$id)
     cond = unique(x$condition)
     
-    plot(END~PA, data = x)
-    title(main = sprintf("%s %s %s", id, coor, cond))
-    plot(END~PV, data = x)
-    title(main = sprintf("%s %s %s", id, coor, cond))
-    plot(END~PD, data = x)
-    title(main = sprintf("%s %s %s", id, coor, cond))
+    # plot(END~PA, data = x)
+    # title(main = sprintf("%s %s %s", id, coor, cond))
+    # plot(END~PV, data = x)
+    # title(main = sprintf("%s %s %s", id, coor, cond))
+    # plot(END~PD, data = x)
+    # title(main = sprintf("%s %s %s", id, coor, cond))
     
     R_PA = summary(m_PA)$r.squared
     R_PV = summary(m_PV)$r.squared
@@ -2134,25 +2199,29 @@ df_rsq_anova$kinematic_marker = factor(df_rsq_anova$kinematic_marker, levels = c
 # Y ----
 df_yrsq_anova = subset(df_rsq_anova, coordinate == "y_inter")
 
+df_yrsq_anova$condition = revalue(df_yrsq_anova$condition, c("no_vision"="NV", "vision" = "V"))
+
+# change factor order
+df_yrsq_anova$condition = factor(df_yrsq_anova$condition, c("V", "NV"))
+
 # run anova on R^2 analysis
 ezANOVA(
   df_yrsq_anova
   , dv = R_sq
   , wid = id
   , within = .(condition, kinematic_marker)
-  # , between = blocking
 )
 ezPlot(
   df_yrsq_anova
   , dv = R_sq
   , wid = id
   , within = .c(condition, kinematic_marker)
-  # , between = blocking
   , x = kinematic_marker
   , split = condition
-  , do_bar = F
-  , y_lab = "y R^2"
-  , x_lab = "kinematic marker"
+  , do_bar = T
+  , y_lab = "R Squared"
+  , x_lab = "Kinematic Marker"
+  , split_lab = "Vision Condition"
 )
 
 
@@ -2282,14 +2351,36 @@ plot_discontinuities(2, "norm_acceleration", "y acceleration (mm/s^2)")
 # identify trials with at least one discontinuity 
 df_long_norm %>%
   dplyr::filter(coordinate == "y_inter") %>%
-  dplyr::group_by(pilot, id, condition, trial) %>%
+  dplyr::group_by(pilot, id, blocking, condition, trial) %>%
   dplyr::summarize(
     discontinuity_trial = unique(neg_accel_trial) | unique(neg_velo_trial)
   ) %>%
-  dplyr::group_by(pilot, id, condition) %>%
+  dplyr::group_by(pilot, id, blocking, condition) %>%
   dplyr::summarise(
     count = sum(discontinuity_trial)
   ) -> df_disccontinuity_anova
+
+# # are there too few discontinuities if block is added as factor?
+# df_long_norm %>%
+#   dplyr::filter(coordinate == "y_inter") %>%
+#   dplyr::group_by(pilot, id, blocking, condition, trial) %>%
+#   dplyr::summarize(
+#     discontinuity_trial = unique(neg_accel_trial) | unique(neg_velo_trial)
+#   ) %>%
+#   dplyr::group_by(pilot, id, blocking, condition) %>%
+#   dplyr::summarise(
+#     count = sum(discontinuity_trial)
+#   ) -> df_disccontinuity_blocks
+# 
+# df_disccontinuity_blocks %>%
+#   dplyr::group_by(pilot, blocking, condition) %>%
+#   dplyr::summarize(
+#     discontinuity_trial = mean(count)
+#   )
+# # NOTE: I do not see why I would not add blocking as factor... 
+ 
+df_disccontinuity_anova$condition = revalue(df_disccontinuity_anova$condition, c("no_vision"="NV", "vision" = "V"))
+df_disccontinuity_anova$blocking = revalue(df_disccontinuity_anova$blocking, c("no_vision"="NV", "vision" = "V"))
 
 # run anova
 ezANOVA(
@@ -2297,16 +2388,20 @@ ezANOVA(
   , dv = count
   , wid = id
   , within = .(condition)
+  , between = .(blocking)
 )
 ezPlot(
   df_disccontinuity_anova
   , dv = count
   , wid = id
   , within = .c(condition)
+  , between = .c(blocking)
+  , split = blocking
   , x = condition
-  , do_bar = F
-  , y_lab = "y discontinuity count"
-  , x_lab = "condition"
+  , do_bar = T
+  , y_lab = "Discontinuities (count)"
+  , x_lab = "Vision Condition"
+  , split_lab = "Blocking"
 )
 
 
@@ -2594,7 +2689,7 @@ display_fanovan = function(filename, norm_y = T) {
   
   fanovan =  rbind(nv, v)
   
-  fanovan$time = 1:200
+  fanovan$time = 0:199/199
   
   # when is it significant?
   px$sig = px$p_value < 0.05
@@ -2616,13 +2711,20 @@ display_fanovan = function(filename, norm_y = T) {
   fanovan$y_SE = sqrt(y_MSE$mse/n)
   fanovan$z_SE = sqrt(z_MSE$mse/n)
   
+  # t-value 
+  tval = qt(1-0.025, n-1) 
+  
+  # change names and order of levels
+  fanovan$condition = revalue(fanovan$condition, c("no_vision"="NV", "vision" = "V"))
+  fanovan$condition = factor(fanovan$condition, c("V", "NV"))
+  
   if (norm_y){
     # overhead view 
     fanovan %>%
       ggplot()+
       geom_path(aes(x=y, y=x, group=condition, color=condition))+
-      geom_area(data = subset(fanovan, condition == "vision"), aes(x=y, y=as.numeric(px_sig)*max(x+x_SE*2)), alpha = 0.2)+
-      geom_ribbon(aes(x=y, ymin=x-x_SE*2, ymax=x+x_SE*2, group=condition, fill=condition), alpha = 0.2)+
+      geom_area(data = subset(fanovan, condition == "vision"), aes(x=y, y=as.numeric(px_sig)*max(x+x_SE*tval)), alpha = 0.2)+
+      geom_ribbon(aes(x=y, ymin=x-x_SE*tval, ymax=x+x_SE*tval, group=condition, fill=condition), alpha = 0.2)+
       xlab("normalized y position")+
       ylab("x position") +
       coord_flip() -> gg
@@ -2632,8 +2734,8 @@ display_fanovan = function(filename, norm_y = T) {
     fanovan %>%
       ggplot()+
       geom_path(aes(x=y, y=z, group=condition, color=condition))+
-      geom_area(data = subset(fanovan, condition == "vision"), aes(x=y, y=as.numeric(pz_sig)*max(z+z_SE*2)), alpha = 0.2)+
-      geom_ribbon(aes(x=y, ymin=z-z_SE*2, ymax=z+z_SE*2, group=condition, fill=condition), alpha = 0.2)+
+      geom_area(data = subset(fanovan, condition == "vision"), aes(x=y, y=as.numeric(pz_sig)*max(z+z_SE*tval)), alpha = 0.2)+
+      geom_ribbon(aes(x=y, ymin=z-z_SE*tval, ymax=z+z_SE*tval, group=condition, fill=condition), alpha = 0.2)+
       xlab("normalized y position")+
       ylab("z position") -> gg
     print(gg)
@@ -2644,36 +2746,35 @@ display_fanovan = function(filename, norm_y = T) {
     fanovan %>%
       ggplot()+
       geom_path(aes(x=time, y=x, group=condition, color=condition))+
-      geom_area(data = subset(fanovan, condition == "vision"), aes(x=time, y=as.numeric(px_sig)*max(x+x_SE*2)), alpha = 0.2)+
-      geom_ribbon(aes(x=time, ymin=x-x_SE*2, ymax=x+x_SE*2, group=condition, fill=condition), alpha = 0.2)+
-      xlab("normalized time")+
-      ylab("x position") -> gg
+      geom_area(data = subset(fanovan, condition == "V"), aes(x=time, y=as.numeric(px_sig)*max(x+x_SE*tval)), alpha = 0.2)+
+      geom_ribbon(aes(x=time, ymin=x-x_SE*tval, ymax=x+x_SE*tval, group=condition, fill=condition), alpha = 0.2)+
+      labs(x = "Proportion of Movement", y = "X Position (mm)", color = "Vision Condition", fill = "Vision Condition") -> gg
     print(gg)
     
     # y vs. time
     fanovan %>%
       ggplot()+
       geom_path(aes(x=time, y=y, group=condition, color=condition))+
-      geom_area(data = subset(fanovan, condition == "vision"), aes(x=time, y=as.numeric(py_sig)*max(y+y_SE*2)), alpha = 0.2)+
-      geom_ribbon(aes(x=time, ymin=y-y_SE*2, ymax=y+y_SE*2, group=condition, fill=condition), alpha = 0.2)+
-      xlab("normalized time")+
-      ylab("y position") -> gg
+      geom_area(data = subset(fanovan, condition == "V"), aes(x=time, y=as.numeric(py_sig)*max(y+y_SE*tval)), alpha = 0.2)+
+      geom_ribbon(aes(x=time, ymin=y-y_SE*tval, ymax=y+y_SE*tval, group=condition, fill=condition), alpha = 0.2)+
+      labs(x = "Proportion of Movement", y = "Y Position (mm)", color = "Vision Condition", fill = "Vision Condition") -> gg
     print(gg)
     
     # z vs. time
     fanovan %>%
       ggplot()+
       geom_path(aes(x=time, y=z, group=condition, color=condition))+
-      geom_area(data = subset(fanovan, condition == "no_vision"), aes(x=time, y=as.numeric(pz_sig)*max(z+z_SE*2)), alpha = 0.2)+
-      geom_ribbon(aes(x=time, ymin=z-z_SE*2, ymax=z+z_SE*2, group=condition, fill=condition), alpha = 0.2)+
-      xlab("normalized time")+
-      ylab("z position") -> gg
+      geom_area(data = subset(fanovan, condition == "NV"), aes(x=time, y=as.numeric(pz_sig)*max(z+z_SE*tval)), alpha = 0.2)+
+      geom_ribbon(aes(x=time, ymin=z-z_SE*tval, ymax=z+z_SE*tval, group=condition, fill=condition), alpha = 0.2)+
+      labs(x = "Proportion of Movement", y = "Z Position (mm)", color = "Vision Condition", fill = "Vision Condition") -> gg
     print(gg)
     
   }
   
   return(fanovan)
 }
+
+# NOTE: figure out interpretation of LSDs
 
 # fanovan_norm_y = display_fanovan('/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_results/fanovan_norm_y')
 fanovan_norm_time = display_fanovan('/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_results/fanovan_norm_time', norm_y = F)
@@ -2697,6 +2798,93 @@ lines(fanovan_norm_time[1:200,]$py_val, col = "blue")
 
 plot(df_spline_grand_avg_effectz$pval, ylab = "z p-value", ty = "l", col = "red")
 lines(fanovan_norm_time[1:200,]$pz_val, col = "blue")
+
+
+# One-way ezANOVA ----
+oneway_test = function(coor, idx) {
+  df_spline_avg %>%
+    dplyr::filter(coordinate == coor, norm_idx == idx) -> df_spline_avg_test
+  
+  ezANOVA(
+    data = df_spline_avg_test
+    , dv = value
+    , wid = id
+    , within = .(condition)
+  ) %>% print()
+  ezPlot(
+    data = df_spline_avg_test
+    , dv = value
+    , wid = id
+    , within = .(condition)
+    , x = condition
+    , do_bar = T
+    , y_lab = "Position (mm)"
+    , x_lab = "Vision Condition"
+  )
+}
+
+# X coordinate threshold
+oneway_test("x_inter", 7)
+oneway_test("x_inter", 8)
+oneway_test("x_inter", 9)
+
+# Y coordinate threshold
+oneway_test("y_inter", 12)
+oneway_test("y_inter", 13)
+oneway_test("y_inter", 14)
+oneway_test("y_inter", 15)
+
+# Z coordinate threshold
+oneway_test("z_inter", 79)
+oneway_test("z_inter", 80)
+
+# NOTE: The FLSD from ezPlot allign with the pairwise t-tests and the fanovan error bars
+
+
+# One-way Manual rANOVA ----
+df_spline_avg %>%
+  dplyr::filter(coordinate == "z_inter", norm_idx == 79) -> df_spline_avg_test
+
+aov_obj = aov(value ~ condition + Error(id/condition), data = df_spline_avg_test)
+aov_sum = summary(aov_obj)
+aov_sum_w = aov_sum$`Error: id:condition`
+aov_unlist = unlist(aov_sum_w)
+MSE = aov_unlist["Mean Sq2"][[1]]
+DF = aov_unlist["Df2"][[1]]
+NN = DF + 1
+SE = sqrt(MSE/NN)
+TT = qt(1-0.025, DF)
+FLSD = SE * TT  * sqrt(2) 
+
+df_spline_avg_test %>%
+  dplyr::group_by(condition) %>%
+  dplyr::summarise(mvalue = mean(value)) -> df_spline_avg_test_graph
+
+df_spline_avg_test_graph$FLSD = FLSD
+
+df_spline_avg_test_graph %>%
+  ggplot()+
+  geom_point(aes(x=condition, y=mvalue))+
+  geom_errorbar(aes(x=condition, ymin = mvalue - FLSD/2, ymax = mvalue + FLSD/2), width = 0.25)+
+  labs(x = "Vision Condition", y = "Position (mm)") 
+
+
+# USE FANOVAN ----
+fanovan_test = fanovan_norm_time[c(79, 279),]
+
+# NOTE: FLSD matches if not devided by two and not multiplied by sqrt(2)!
+zFLSD = fanovan_test$z_SE * TT
+
+fanovan_test$zFLSD = zFLSD
+
+fanovan_test$condition = factor(fanovan_test$condition, c("NV", "V"))
+
+fanovan_test %>%
+  ggplot()+
+  geom_point(aes(x=condition, y=z))+
+  geom_errorbar(aes(x=condition, ymin = z - zFLSD, ymax = z + zFLSD), width = 0.25)+
+  labs(x = "Vision Condition", y = "Position (mm)") 
+
 
 
 
@@ -2883,17 +3071,17 @@ x_index = match(df_long_biny$time_lores,x)
 s = sort(unique(df_long_biny$id))
 s_index = match(df_long_biny$id, s)
 
-# # compute the model matrix
-# z = data.frame(
-#   condition1 = ifelse(df_long_biny$condition == "vision", 1, 0)
-#   , condition2 =ifelse(df_long_biny$condition == "no_vision", 1, 0)
-# )
-
 # compute the model matrix
 z = data.frame(
-  condition1 = 1  # intercept
-  , condition2 = ifelse(df_long_biny$condition == "vision", 1/2, -1/2)
+  condition1 = ifelse(df_long_biny$condition == "vision", 1, 0)
+  , condition2 =ifelse(df_long_biny$condition == "no_vision", 1, 0)
 )
+
+# # compute the model matrix
+# z = data.frame(
+#   condition1 = 1  # intercept
+#   , condition2 = ifelse(df_long_biny$condition == "vision", 1/2, -1/2)
+# )
 
 # compute the unique entries in the model matrix
 temp = as.data.frame(z)
@@ -2950,7 +3138,7 @@ data_for_stan = list(
 )
 
 # # package for cluster
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/data_for_stan_effect_15.RData")
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_data/data_for_stan_11.RData")
 
 # # see 'cluster_analysis'
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_study/gp_regression.stan")
@@ -2986,7 +3174,7 @@ data_for_stan = list(
 
 
 # load stan fit object that was computed in the cloud
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory\ Studies/MSc_results/post_300_15_mtd17_effect.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory\ Studies/MSc_results/post_1000_15_mtd17.rdata")
 
 
 
@@ -3073,10 +3261,15 @@ stan_summary(
 )
 
 # population mean function
-stan_summary(
+f_print = stan_summary(
   from_stan = post
   , par = c('f')
 )
+f_print = data.frame(f_print)
+hist(f_print$Rhat)
+range(f_print$Rhat)
+hist(f_print$n_eff)
+range(f_print$n_eff)
 
 # population noise function
 stan_summary(
@@ -3085,20 +3278,30 @@ stan_summary(
 )
 
 # participant mean functions
-stan_summary(
+subj_f_print = stan_summary(
   from_stan = post
   , par = c('subj_f')
-)
+) 
+subj_f_print = data.frame(subj_f_print)
+hist(subj_f_print$Rhat)
+range(subj_f_print$Rhat)
+hist(subj_f_print$n_eff)
+range(subj_f_print$n_eff)
 
 # participant noise functions
-stan_summary(
+noise_subj_f_print = stan_summary(
   from_stan = post
   , par = c('noise_subj_f')
 )
+noise_subj_f_print = data.frame(noise_subj_f_print)
+hist(noise_subj_f_print$Rhat)
+range(noise_subj_f_print$Rhat)
+hist(noise_subj_f_print$n_eff)
+range(noise_subj_f_print$n_eff)
 
 
 
-
+ 
 ####                 Violins 
 
 
@@ -3126,13 +3329,23 @@ get_50_HDI = function(y) {
 }
 
 # get violin plots
-get_violin = function(df, y_lab, samps = 16*300/2, hline = FALSE, facet = FALSE) {
+get_violin = function(df, y_lab, iseffect = F, hline = FALSE, facet = FALSE) {
 
   df$condition = factor(df$condition)
+  
+  if (iseffect) {
+    df$condition = revalue(df$condition, c("effect" = "V - NV"))
+    x_lab = "Vision Condition Effect"
+  }
+  else  {
+    df$condition = revalue(df$condition, c("no_vision" = "NV", "vision" = "V"))
+    df$condition = factor(df$condition, c("NV", "V"))
+    x_lab = "Vision Condition"
+  }
 
   gg = ggplot(data = df)+
     geom_violin(aes(x = condition, y = value))+
-    labs(x = "", y = y_lab)+
+    labs(x = x_lab, y = y_lab)+
     stat_summary(aes(x = condition, y = value), fun.data = get_95_HDI, size = 0.5)+
     stat_summary(aes(x = condition, y = value), fun.data = get_50_HDI, size = 1.5)
 
@@ -3179,13 +3392,14 @@ volatilities %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> volatilities_c
 
-gg_volatilities = get_violin(volatilities_c, "volatility")
+gg_volatilities = get_violin(volatilities_c, "Volatility")
 
 volatilities %>%
   dplyr::select(-c(vision, no_vision)) %>%
   gather(condition, value, effect) -> volatilities_e
 
-gg_volatilities_effect = get_violin(volatilities_e, "volatility effect (vision - no-vision)", hline = T)
+gg_volatilities_effect = get_violin(volatilities_e, "Volatility", iseffect = T, hline = T)
+
 
 # population mean amplitude
 amplitudes = data.frame(post_samples$amplitude)
@@ -3197,13 +3411,13 @@ amplitudes %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> amplitudes_c
 
-gg_amplitudes = get_violin(amplitudes_c, "volatility")
+gg_amplitudes = get_violin(amplitudes_c, "Amplitude")
 
 amplitudes %>%
   dplyr::select(-c(vision, no_vision)) %>%
   gather(condition, value, effect) -> amplitudes_e
 
-gg_amplitudes_effect = get_violin(amplitudes_e, "amplitude effect (vision - no-vision)", hline = T)
+gg_amplitudes_effect = get_violin(amplitudes_e, "Amplitude", iseffect = T, hline = T)
 
 
 # participant mean amplitude sd
@@ -3216,13 +3430,13 @@ subj_amplitude_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> subj_amplitude_sds_c
 
-gg_amplitude_sds = get_violin(subj_amplitude_sds_c, "participant amplitude sd")
+gg_amplitude_sds = get_violin(subj_amplitude_sds_c, "Participant Amplitude Variability (SD)")
 
 subj_amplitude_sds %>%
   dplyr::select(-c(vision, no_vision)) %>%
   gather(condition, value, effect) -> subj_amplitude_sds_e
 
-gg_amplitude_sds_effect = get_violin(subj_amplitude_sds_e, "participant amplitude sd effect (vision - no-vision)", hline = T)
+gg_amplitude_sds_effect = get_violin(subj_amplitude_sds_e, "Participant Amplitude Variability (SD)", iseffect = T, hline = T)
 
 
 # participant mean volatilty sd
@@ -3235,13 +3449,14 @@ subj_volatility_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> subj_volatility_sds_c
 
-gg_volatility_sds = get_violin(subj_volatility_sds_c, "participant volatility sd")
+gg_volatility_sds = get_violin(subj_volatility_sds_c, "Participant Volatility Variability (SD)")
 
 subj_volatility_sds %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> subj_volatility_sds_e
 
-gg_volatility_sds_effect = get_violin(subj_volatility_sds_e, "participant volatility sd effect (vision - no-vision)", hline = T)
+gg_volatility_sds_effect = get_violin(subj_volatility_sds_e, "Participant Volatility Variability (SD)", iseffect = T, hline = T)
+
 
 
 # population noise volatilty
@@ -3254,13 +3469,14 @@ noise_volatilities %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> noise_volatilities_c
 
-gg_noise_volatilities = get_violin(noise_volatilities_c, "noise volatility")
+gg_noise_volatilities = get_violin(noise_volatilities_c, "Noise Volatility")
 
 noise_volatilities %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> noise_volatilities_e
 
-gg_noise_volatilities_effect = get_violin(noise_volatilities_e, "noise volatility effect (vision - no-vision)", hline = T)
+gg_noise_volatilities_effect = get_violin(noise_volatilities_e, "Noise Volatility", iseffect = T, hline = T)
+
 
 
 # population noise amplitude
@@ -3273,13 +3489,13 @@ noise_amplitudes %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> noise_amplitudes_c
 
-gg_noise_amplitudes = get_violin(noise_amplitudes_c, "noise amplitude")
+gg_noise_amplitudes = get_violin(noise_amplitudes_c, "Noise Amplitude")
 
 noise_amplitudes %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> noise_amplitudes_e
 
-gg_noise_amplitudes_effect = get_violin(noise_amplitudes_e, "noise amplitude effect (vision - no-vision)", hline = T)
+gg_noise_amplitudes_effect = get_violin(noise_amplitudes_e, "Noise Amplitude", iseffect = T, hline = T)
 
 
 
@@ -3293,13 +3509,13 @@ noise_subj_volatility_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> noise_subj_volatility_sds_c
 
-gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds_c, "noise participant volatility sd")
+gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds_c, "Noise Participant Volatility Variability (SD)")
 
 noise_subj_volatility_sds %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> noise_subj_volatility_sds_e
 
-gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "noise participant volatility sd effect (vision - no-vision)", hline = T)
+gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "Noise Participant Volatility Variability (SD)", iseffect = T, hline = T)
 
 
 
@@ -3313,13 +3529,13 @@ noise_subj_amplitude_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> noise_subj_amplitude_sds_c
 
-gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds_c, "noise participant amplitude sd")
+gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds_c, "Noise Participant Amplitude Variability (SD)")
 
 noise_subj_amplitude_sds %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> noise_subj_amplitude_sds_e
 
-gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "noise participant amplitude sd effect (vision - no-vision)", hline = T)
+gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "Noise Participant Amplitude Variability (SD)", iseffect = T, hline = T)
 
 
 
@@ -3401,9 +3617,9 @@ subj_to_plot %>%
   geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
   geom_line(data = subset(df_id_meansy, condition == "vision"), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 0.5, color = "gray50")+
-  ylab('scaled position')+
-  xlab('normalized time')+ 
-  ggtitle('vision')+
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
+  ggtitle('Vision')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3414,43 +3630,54 @@ subj_to_plot %>%
 print(p1)
 
 
-# NOTE: stan id and df id will not necessarily match (some participant numbers removed)
+# figure out participant details
+p1cols = ggplot_build(p1)$data[[1]]
 
-# # figure out participant details
-# p1cols = ggplot_build(p1)$data[[1]]
-# 
-# # just pick one subject
-# subj_to_plot %>%
-#   group_by(id) %>%
-#   dplyr::summarise(mins = min(med_1)) %>%
-#   dplyr::summarise(idx = which.min(mins))
-# 
-# lo=0.5
-# hi=0.7
-# subj_to_plot %>%
-#   dplyr::filter(id == 11, time >=lo, time <=hi) -> subj_to_plot_11
-# 
-# p1cols %>%
-#   dplyr::filter(group ==11, x == 1)
-# 
-# subj_to_plot_11 %>%
-#   ggplot()+
-#   geom_line(aes(x=time, y=med_1), color = '#00BFC4', size = 2)+
-#   geom_line(aes(x=time, y=hi95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-#   geom_line(aes(x=time, y=lo95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-#   geom_line(data = subset(df_id_meansy, condition == "vision" & id == 11 & time_lores >=lo & time_lores <=hi), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
-#   ylab('')+
-#   xlab('')+ 
-#   theme_gray(base_size = 20)+
-#   theme(
-#     panel.grid.major = element_line(size = 0)
-#     , panel.grid.minor = element_line(size = 0)
-#     , axis.ticks = element_line(size = 0)
-#     , axis.text = element_blank()
-#     , legend.position = "none"
-#     , panel.border = element_rect(size = 2, fill = NA)
-#     , panel.background = element_rect(fill = "white", color = "black")
-#   ) 
+# get range
+lo=0.5
+hi=0.7
+
+# just pick one subject
+subj_to_plot %>%
+  group_by(id) %>%
+  dplyr::filter(time > lo, time < hi) %>%
+  dplyr::summarise(mins = min(med_1)) %>%
+  dplyr::summarise(idx = which.min(mins)) -> p1_id2
+p1_id = p1_id2[[1]]
+
+subj_to_plot %>%
+  dplyr::filter(id == p1_id, time >=lo, time <=hi) -> subj_to_plot_id
+
+p1cols %>%
+  dplyr::filter(group ==p1_id, x == 1) -> p1_id_col2
+p1_id_col = p1_id_col2$colour
+
+# get id for df_id_meansy
+# NOTE: stan id and df id will not necessarily match (some participant numbers removed)
+id_list = as.numeric(sort(unique(df_id_meansy$id)))
+df_id = id_list[p1_id]
+
+# plot
+subj_to_plot_id %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_1), color = p1_id_col, size = 2)+
+  geom_line(aes(x=time, y=hi95_1), color = p1_id_col, linetype = "dashed", size = 2)+
+  geom_line(aes(x=time, y=lo95_1), color = p1_id_col, linetype = "dashed", size = 2)+
+  geom_line(data = subset(df_id_meansy, condition == "vision" & id == df_id & time_lores >=lo & time_lores <=hi), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
+  ylab('')+
+  xlab('')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , axis.ticks = element_line(size = 0)
+    , axis.text = element_blank()
+    , legend.position = "none"
+    , panel.border = element_rect(size = 2, fill = NA)
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
+
+
 
 # condition 2
 subj_to_plot %>%
@@ -3460,9 +3687,9 @@ subj_to_plot %>%
   geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
   geom_line(data = subset(df_id_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_avg, group = id ),size = 0.5, color = "gray50")+
-  ylab('scaled position')+
-  xlab('normalized time')+ 
-  ggtitle('no vision')+
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
+  ggtitle('No Vision')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3472,39 +3699,51 @@ subj_to_plot %>%
   ) -> p2
 print(p2)
 
-# # figure out participant details
-# p2cols = ggplot_build(p2)$data[[1]]
-# 
-# # just pick one subject
-# subj_to_plot %>%
-#   group_by(id) %>%
-#   dplyr::summarise(mins = min(med_2)) %>%
-#   dplyr::summarise(idx = which.min(mins))
-# 
-# subj_to_plot %>%
-#   dplyr::filter(id == 6, time >=1, time <=3) -> subj_to_plot_6
-# 
-# p1cols %>%
-#   dplyr::filter(group ==6, x == 1)
-# 
-# subj_to_plot_6 %>%
-#   ggplot()+
-#   geom_line(aes(x=time, y=med_2), color = '#7CAE00', size = 2)+
-#   geom_line(aes(x=time, y=hi95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-#   geom_line(aes(x=time, y=lo95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-#   geom_line(data = subset(df_id_meansy, condition == "no_vision" & id == 6 & time_lores/bin_width+1 >=1 & time_lores/bin_width+1 <=3), aes(x=time_lores/bin_width+1, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
-#   ylab('')+
-#   xlab('')+
-#   theme_gray(base_size = 20)+
-#   theme(
-#     panel.grid.major = element_line(size = 0)
-#     , panel.grid.minor = element_line(size = 0)
-#     , axis.ticks = element_line(size = 0)
-#     , axis.text = element_blank()
-#     , legend.position = "none"
-#     , panel.border = element_rect(size = 2, fill = NA)
-#     , panel.background = element_rect(fill = "white", color = "black")
-#   ) 
+
+# figure out participant details
+p2cols = ggplot_build(p2)$data[[1]]
+
+# get range
+lo2=0.3
+hi2=0.5
+
+# just pick one subject
+subj_to_plot %>%
+  group_by(id) %>%
+  dplyr::filter(time > lo2, time < hi2) %>%
+  dplyr::summarise(maxs = max(med_2)) %>%
+  dplyr::summarise(idx = which.max(maxs)) -> p2_id2
+p2_id = p2_id2[[1]]
+
+subj_to_plot %>%
+  dplyr::filter(id == p2_id, time >=lo2, time <=hi2) -> subj_to_plot_id2
+
+p2cols %>%
+  dplyr::filter(group ==p2_id, x == 1) -> p2_id_col2
+p2_id_col = p2_id_col2$colour
+
+# get id for df_id_meansy
+# NOTE: stan id and df id will not necessarily match (some participant numbers removed)
+df_id2 = id_list[p2_id]
+
+subj_to_plot_id2 %>%
+  ggplot()+
+  geom_line(aes(x=time, y=med_2), color = p2_id_col, size = 2)+
+  geom_line(aes(x=time, y=hi95_2), color = p2_id_col, linetype = "dashed", size = 2)+
+  geom_line(aes(x=time, y=lo95_2), color = p2_id_col, linetype = "dashed", size = 2)+
+  geom_line(data = subset(df_id_meansy, condition == "no_vision" & id == df_id2 & time_lores >=lo2 & time_lores <=hi2), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
+  ylab('')+
+  xlab('')+
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , axis.ticks = element_line(size = 0)
+    , axis.text = element_blank()
+    , legend.position = "none"
+    , panel.border = element_rect(size = 2, fill = NA)
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
 
 
 
@@ -3588,9 +3827,9 @@ noise_subj_to_plot %>%
   geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
   geom_line(data = subset(noise_df_long_biny, condition == "vision"), aes(x=time_lores, y=SD, group = id), size = 0.5, color = "gray50")+
-  ylab('log standard deviation')+
-  xlab('normalized time')+
-  ggtitle('vision')+
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Movement')+
+  ggtitle('Vision')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3606,9 +3845,9 @@ noise_subj_to_plot %>%
   geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
   geom_line(data = subset(noise_df_long_biny, condition == "no_vision"), aes(x=time_lores, y=SD, group = id), size = 0.5, color = "gray50")+
-  ylab('log standard deviation')+
-  xlab('normalized time')+
-  ggtitle('no vision')+
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Movement')+
+  ggtitle('No Vision')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3699,12 +3938,12 @@ to_plot %>%
   geom_line(aes(x=time, y=med_1), color = "turquoise")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
   geom_line(data=subset(df_condition_meansy, condition == "vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1)+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1)+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1)+
-  ylab('scaled position')+
-  xlab('normalized time')+
-  ggtitle('vision')+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1)+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1)+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1)+
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
+  ggtitle('Vision')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3717,13 +3956,13 @@ to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  # geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
+  geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
   # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1)+
   # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1)+
   # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1)+
-  ylab('scaled position')+
-  xlab('normalized time')+
-  ggtitle('no vision')+
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
+  ggtitle('No Vision')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3739,16 +3978,18 @@ to_plot %>%
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  annotate("text", label = "vision", x = 3/15, y = -0.15, color = "turquoise")+
-  annotate("text", label = "no vision", x = 8/15, y = -1, color = "red")+
+  annotate("text", label = "Vision", x = 3/15, y = -0.15, color = "turquoise")+
+  annotate("text", label = "No Vision", x = 8/15, y = -1, color = "red")+
+  geom_line(data=subset(df_condition_meansy, condition == "vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
+  geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
   geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
   geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
   geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
   geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1, color = "red")+
   geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1, color = "red")+
   geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1, color = "red")+
-  ylab('scaled position')+
-  xlab('normalized time')+
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3800,12 +4041,20 @@ kms_ids_to_plot %>%
   ) -> kms_to_plot_effect
 kms_to_plot_effect
 
+# get empirical difference as well
+df_condition_meansy %>%
+  dplyr::group_by(time_lores) %>%
+  dplyr::summarise(
+    effect = position_bin_scale_grand_avg[condition == "vision"] - position_bin_scale_grand_avg[condition == "no_vision"]
+      ) -> df_condition_effecty
+
 to_plot_effect %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1), color = "purple")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "purple", alpha=0.5)+
-  ylab('scaled position effect (vision - no-vision)')+
-  xlab('normalized time')+
+  ylab('Scaled Position (V - NV)')+
+  xlab('Proportion of Movement')+ 
+  geom_line(data=subset(df_condition_effecty), aes(x=time_lores, y=effect), size = 0.5, color = "grey50")+
   geom_point(data = kms_to_plot_effect, aes(x=time_peak_velocity, y=max(to_plot_effect$hi95_1)), size = 1)+
   geom_point(data = kms_to_plot_effect, aes(x=time_peak_acceleration, y=max(to_plot_effect$hi95_1)), size = 1)+
   geom_point(data = kms_to_plot_effect, aes(x=time_peak_deceleration, y=max(to_plot_effect$hi95_1)), size = 1)+
@@ -3880,9 +4129,9 @@ noise_to_plot %>%
   geom_line(aes(x=time, y=med_1), color = "turquoise")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
   geom_line(data=subset(subj_noise, condition == "vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
-  ylab('log standard deviation')+
-  xlab('time')+
-  ggtitle('vision')+
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Time')+
+  ggtitle('Vision')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3895,10 +4144,10 @@ noise_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  # geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
-  ylab('log standard deviation')+
-  xlab('time')+
-  ggtitle('no vision')+
+  geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Time')+
+  ggtitle('No Vision')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3914,16 +4163,18 @@ noise_to_plot %>%
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1),fill = "turquoise", alpha=0.5)+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
+  geom_line(data=subset(subj_noise, condition == "vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
+  geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
   geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_velocity, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
   geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_acceleration, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
   geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_deceleration, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
   geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
   geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
   geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
-  ylab('log standard deviation')+
-  xlab('time')+
-  annotate("text", label = "vision", x = 2/15, y = -1.0, color = "turquoise")+
-  annotate("text", label = "no vision", x = 4/15, y = -2.5, color = "red")+
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Time')+
+  annotate("text", label = "Vision", x = 2/15, y = -1.0, color = "turquoise")+
+  annotate("text", label = "No Vision", x = 4/15, y = -2.5, color = "red")+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -3951,15 +4202,23 @@ noise_to_plot_effect = noise_f_sum_effect %>%
     , hi50_1 = quantile(effect,.75)
   )
 
+# get empirical effect
+subj_noise %>%
+  dplyr::group_by(time_lores) %>%
+  dplyr::summarise(
+    effect = avg_SD[condition == "vision"] - avg_SD[condition == "no_vision"]
+  ) -> subj_noise_effect
+
 noise_to_plot_effect %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1), color = "purple")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "purple", alpha=0.5)+
+  geom_line(data=subj_noise_effect, aes(x=time_lores, y=effect), size = 0.5, color = "gray50")+
   geom_point(data = kms_to_plot_effect, aes(x=time_peak_velocity, y=min(noise_to_plot_effect$lo95_1)), size = 1)+
   geom_point(data = kms_to_plot_effect, aes(x=time_peak_acceleration, y=min(noise_to_plot_effect$lo95_1)), size = 1)+
   geom_point(data = kms_to_plot_effect, aes(x=time_peak_deceleration, y=min(noise_to_plot_effect$lo95_1)), size = 1)+
-  ylab('log standard deviation effect (vision - no-vision)')+
-  xlab('normalized time')+
+  ylab('Log Standard Deviation (V - NV)')+
+  xlab('Proportion of Time')+
   geom_hline(yintercept = 0, linetype = "dashed")+
   theme_gray(base_size = 20)+
   theme(

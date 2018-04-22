@@ -258,12 +258,13 @@ df_noise_pop %>%
 
 # Sampling from f(x)s with noise ----
 
+#################### HERE ######################
 # need to create conditions
 df %>%
   spread(parameter, value) %>%
   dplyr::mutate(
-    condition1 = intercept + effect/2
-    , condition2 = intercept - effect/2
+    condition1 =  intercept  # intercept + effect/2
+    , condition2 =  effect     #intercept - effect/2
   ) %>%
   dplyr::select(-c(effect, intercept)) %>%
   gather(condition, value, condition1:condition2) -> df_c
@@ -271,11 +272,12 @@ df %>%
 df_noise %>%
   spread(parameter, value) %>%
   dplyr::mutate(
-    condition1 = intercept + effect/2
-    , condition2 = intercept - effect/2
+    condition1 =  intercept  # intercept + effect/2
+    , condition2 =  effect     #intercept - effect/2
   ) %>%
   dplyr::select(-c(effect, intercept)) %>%
   gather(condition, value, condition1:condition2) -> df_noise_c
+#################### HERE ######################
 
 # specify number of trials by condition
 n_trials_by_condition = 10

@@ -70,10 +70,10 @@ get_subj_Sigmas = function(subj_amplitude_sd, subj_volatility_sd, Sigmas){
 # Experimental parameters ----
 
 # number of participants
-n = 20  
+n = 29  
 
 # trajectory time points; they are bounded from 0 to 1 so that amplitudes and volatilities are on the right scale
-x = 0:15/15  
+x = 0:14/14
 
 # the number of time points
 n_x = length(x)
@@ -161,7 +161,7 @@ df %>%
   theme(legend.position="none")
 
 # save the generative participant mean functions
-saveRDS(df, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_subj.rds")
+saveRDS(df, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_subj.rds")
 
 # join the population mean functions together
 df_pop = do.call(cbind, fs)
@@ -186,7 +186,7 @@ df_pop %>%
   facet_grid(condition~.)
 
 # save the generative population mean functions
-saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_pop.rds")
+saveRDS(df_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_pop.rds")
 
 
 
@@ -236,7 +236,7 @@ df_noise %>%
   theme(legend.position="none")
 
 # save generative participant noise functions
-saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_subj_noise.rds")
+saveRDS(df_noise, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_subj_noise.rds")
 
 # join population noise functions
 df_noise_pop = do.call(cbind, fs_noise)
@@ -261,14 +261,14 @@ df_noise_pop %>%
   facet_grid(condition~.)
 
 # save generative population noise functions
-saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal_pop_noise.rds")
+saveRDS(df_noise_pop, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_pop_noise.rds")
 
 
 
 # Sampling from f(x)s with noise ----
 
 # specify number of trials by condition
-n_trials_by_condition = 100
+n_trials_by_condition = 20
 
 # verify that the participant noise function and participant mean function data frames are alligned 
 mean(df$id == df_noise$id)
@@ -326,4 +326,4 @@ df_final$coordinate = factor("z")
 
 # Save Fake Data File ----
 
-saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_data_proposal.rds")
+saveRDS(df_final, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal.rds")

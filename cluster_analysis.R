@@ -1,5 +1,5 @@
 # Upload stan_data ----
-load("data_for_stan_15.RData")
+load("fake_stan_data_thesis.Rdata")
 
 
 # Load Packages ----
@@ -23,7 +23,8 @@ post = sampling(
   , verbose = T
   , refresh = 1
   , control = list(
-    max_treedepth = 17
+    # max_treedepth = 17
+    max_treedepth = 15
     , adapt_delta = 0.99  
   )  
   , include = F
@@ -42,6 +43,6 @@ post = sampling(
 #save result for later
 save(
   post
-  , file = 'post_1000_15_mtd17.rdata'
+  , file = 'fake_thesis_post_1000_15_mtd15.rdata'
 )
 

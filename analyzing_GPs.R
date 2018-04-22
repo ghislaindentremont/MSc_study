@@ -7,9 +7,10 @@ library(MASS)
 library(reshape2)
 library(ez)
 library(coda)
+library(plyr)
 
 # load in the data
-df_long_sim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_proposal_15/fake_data_proposal.rds")
+df_long_sim = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal.rds")
 
 # rename coordinate 'y', not 'z'
 df_long_sim$coordinate = factor("y")
@@ -23,11 +24,6 @@ summary(df_long_sim)
 
 # look at a few rows of dataset
 head(df_long_sim)
-
-# # set trial start to zero (for real data)
-# df_long_sim %>%
-#   group_by(id, trial, condition, coordinate) %>%
-#   dplyr::mutate(position = position - position[time == 0]) -> df_long_sim
 
 # function
 plot_sim = function(ids_use, coor) {
@@ -86,13 +82,13 @@ df_long_sim_grand_avg %>%
   ggplot()+
   geom_line(aes(x=time, y=position_grand_avg, color = condition))+
   ylab('grand average position')+
-  theme_gray(base_size = 20)#+
-  # theme(
-  #   panel.grid.major = element_line(size = 0)
-  #   , panel.grid.minor = element_line(size = 0)
-  #   , legend.position = "none"
-  #   , panel.background = element_rect(fill = "white", color = "black")
-  # )
+  theme_gray(base_size = 20)+
+  theme(
+    panel.grid.major = element_line(size = 0)
+    , panel.grid.minor = element_line(size = 0)
+    , legend.position = "none"
+    , panel.background = element_rect(fill = "white", color = "black")
+  )
 
 
 
@@ -101,76 +97,61 @@ df_long_sim_grand_avg %>%
 ####                   R^2                          ####
 ########################################################
 
-# create kinematic marker-like variables
-# what time points should be chosen? 
-# for real data they all are before slightly past the half way mark
-TT = c(0.2, 0.4, 0.6)
-
-df_long_sim %>%
-  dplyr::group_by(id, condition, trial, coordinate) %>%
-  dplyr::summarize(
-    T1 = position[time ==  TT[1]]
-    , T2 = position[time == TT[2]]
-    , T3 = position[time == TT[3]]
-    , END = position[time == 1]
-  ) -> df_rsq_lm
+num_points = length(unique(df_long_sim$time))
 
 # for each participant and each condition extract R^2
-df_rsq_anova2 = ddply(
-  .data = df_rsq_lm
+df_rsq_anova = ddply(
+  .data = df_long_sim
   , .variables = .(id, condition, coordinate)
   , .fun = function(x) {
-    m_T1 = lm(END~T1, data=x)
-    m_T2 = lm(END~T2, data=x)
-    m_T3 = lm(END~T3, data=x)
     
-    coor = unique(x$coordinate)
-    id = unique(x$id)
-    cond = unique(x$condition)
-    
-    # plot(END~T1, data = x)
-    # title(main = sprintf("%s %s %s", id, coor, cond))
-    # plot(END~T2, data = x)
-    # title(main = sprintf("%s %s %s", id, coor, cond))
-    # plot(END~T3, data = x)
-    # title(main = sprintf("%s %s %s", id, coor, cond))
-    
-    R_T1 = summary(m_T1)$r.squared
-    R_T2 = summary(m_T2)$r.squared
-    R_T3 = summary(m_T3)$r.squared
-    
-    return(data.frame(T1 = R_T1, T2 = R_T2, T3 = R_T3))
+    Rs = NULL
+    for (point in 1:num_points) {
+      
+      X = x$position[x$time == x$time[point]]
+      Y = x$position[x$time == x$time[num_points]]
+      
+      m = lm(Y~X)
+      
+      R_m = summary(m)$r.squared
+      
+      Rs = c(Rs, R_m)
+    }
+
+    return(data.frame(R_sq = Rs, time = unique(x$time)))
   }
 )
 
-df_rsq_anova2 %>%
-  gather("kinematic_marker", "R_sq", T1:T3) -> df_rsq_anova
-
-df_rsq_anova$kinematic_marker = factor(df_rsq_anova$kinematic_marker, levels = c("T1", "T2", "T3"))
+df_rsq_anova$time = factor(round(df_rsq_anova$time, 2))
 
 
 # Y ----
-df_yrsq_anova = subset(df_rsq_anova, coordinate == "y")
+df_yrsq_anova = subset(df_rsq_anova, coordinate == "y" & time != 1)
+
+df_yrsq_anova$condition = revalue(df_yrsq_anova$condition, c("condition1"="Condition1", "condition2" = "Condition2"))
+
+# change factor order
+df_yrsq_anova$condition = factor(df_yrsq_anova$condition, c("Condition1", "Condition2"))
 
 # run anova on R^2 analysis
 ezANOVA(
   df_yrsq_anova
   , dv = R_sq
   , wid = id
-  , within = .(condition, kinematic_marker)
+  , within = .(condition, time)
 )
 ezPlot(
   df_yrsq_anova
   , dv = R_sq
   , wid = id
-  , within = .c(condition, kinematic_marker)
-  , x = kinematic_marker
+  , within = .c(condition, time)
+  , x = time
   , split = condition
-  , do_bar = F
-  , y_lab = "y R^2"
-  , x_lab = "kinematic marker"
+  , do_bar = T
+  , y_lab = "R Squared"
+  , x_lab = "Proportion of Movement"
+  , split_lab = "Condition"
 )
-
 # NOTE: unclear how to interpret R^2 results for these fake data
 
 
@@ -189,7 +170,7 @@ df_long_sim %>%
 
 # function to plot spatial variability
 plot_spat_var = function(ids_use, dv, y_label) {
-  
+
   df_long_spat_var %>%
     dplyr::filter(as.numeric(id) %in% ids_use) %>%
     ggplot()+
@@ -203,13 +184,13 @@ plot_spat_var = function(ids_use, dv, y_label) {
 plot_spat_var(1:10, "y_inter", "y spatial variability (sd)")
 plot_spat_var(11:20, "y_inter", "y spatial variability (sd)")
 
-# grand averages 
+# grand averages
 df_long_spat_var %>%
   dplyr::group_by(condition, coordinate, time) %>%
-  dplyr::summarise(spat_var_avg = mean(spat_var)) -> df_long_spat_var_avg  
+  dplyr::summarise(spat_var_avg = mean(spat_var)) -> df_long_spat_var_avg
 
 
-# plot grand averages 
+# plot grand averages
 df_long_spat_var_avg %>%
   ggplot()+
   geom_line(aes(x=time, y=spat_var_avg, group=condition, color=condition))+
@@ -218,90 +199,44 @@ df_long_spat_var_avg %>%
 
 
 # ANOVA ----
-df_spat_var = df_long_spat_var
+df_spat_var_anova = df_long_spat_var
 
-df_spat_var %>%
-  dplyr::group_by(id, condition, coordinate) %>%
-  dplyr::summarize(
-    T1 = spat_var[time == TT[1]]
-    , T2 = spat_var[time == TT[2]]
-    , T3 = spat_var[time == TT[3]]
-    , END = spat_var[time == 1]
-  ) %>%
-  gather("kinematic_marker", "spatial_variability", T1:END) -> df_spat_var_anova
+df_spat_var_anova$time = factor(round(df_spat_var_anova$time,2))
 
-# change factor order for plot
-df_spat_var_anova$kinematic_marker = factor(df_spat_var_anova$kinematic_marker, levels = c("T1", "T2", "T3", "END"))
 
 # Y ----
 df_yspat_var_anova = subset(df_spat_var_anova, coordinate == "y")
 
+df_yspat_var_anova$condition = revalue(df_yspat_var_anova$condition, c("condition1"="Condition1", "condition2" = "Condition2"))
+
+# change factor order
+df_yspat_var_anova$condition = factor(df_yspat_var_anova$condition, c("Condition1", "Condition2"))
+
+# get population noise
+df_pop_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_pop_noise.rds")
+
 ezANOVA(
   df_yspat_var_anova
-  , dv = spatial_variability
-  , wid = id
-  , within = .(condition, kinematic_marker)
-)
-ezPlot(
-  df_yspat_var_anova
-  , dv = spatial_variability
-  , wid = id
-  , within = .c(condition, kinematic_marker)
-  , x = kinematic_marker
-  , split = condition
-  , do_bar = F
-  , y_lab = "y spatial variability (sd)"
-  , x_lab = "kinematic marker"
-)
-
-
-
-
-########################################################
-####               Ellipsoid                        ####
-########################################################
-
-df_spat_var %>%
-  dplyr::select(id, condition, coordinate, time, spat_var) %>%
-  spread(coordinate, spat_var) -> df_ellipsoid
-
-# NOTE: we cannot do Ellipsoid in this 1D case 
-# NOTE: therefore, this is very similar to the spatial variability profile
-df_ellipsoid$volume = df_ellipsoid$y 
-
-# function to plot ellipsoid volumes
-plot_ellipsoids = function(ids_use, y_label) {
-  df_ellipsoid %>%
-    dplyr::filter(as.numeric(id) %in% ids_use) %>%
-    ggplot()+
-    geom_line(aes(x=time, y=volume, group=id, color=id), alpha = 0.5, size = .5)+
-    xlab("time")+
-    ylab(y_label)+
-    facet_grid(.~condition) %>% print()
-}
-
-# use function
-plot_ellipsoids(1:10, "volume (mm^3)")
-plot_ellipsoids(11:20, "volume (mm^3)")
-
-# run ANOVAs
-ezANOVA(
-  df_ellipsoid
-  , dv = volume
+  , dv = spat_var
   , wid = id
   , within = .(condition, time)
 )
-ezPlot(
-  df_ellipsoid
-  , dv = volume
+spatplot = ezPlot(
+  df_yspat_var_anova
+  , dv = spat_var
   , wid = id
   , within = .c(condition, time)
-  , x =  time
+  , x = time
   , split = condition
-  , do_bar = F
-  , y_lab = "volume (mm^3)"
-  , x_lab = "proportion of movement"
+  , do_bar = T
+  , y_lab = "Spatial Variability (SD)"
+  , x_lab = "Proportion of Movement"
+  , split_lab = "Condition"
 )
+spatplot+
+  geom_line(data=df_pop_noise, aes(x = time*(num_samples-1)+1, y = exp(condition1)), linetype = "longdash")+
+  geom_line(data=df_pop_noise, aes(x = time*(num_samples-1)+1, y = exp(condition2)), linetype = "longdash")
+  
 
 
 
@@ -315,7 +250,9 @@ round0 = function(x,z){
 }
 
 # we cannot oversample because in this case we do not have that many samples 
-num_samples = 16
+num_samples = 15
+
+bin_width = 1/(num_samples-1)
 
 # # NOTE: df_spline should be nearly identical to df_long_sim
 # # NOTE: in the case of time normalization with so few samples there is no point in this
@@ -358,12 +295,22 @@ df_spline_avg %>%
     value = mean(value)
   ) -> df_spline_grand_avg
 
+
+df_spline_grand_avg$Condition = df_spline_grand_avg$condition
+df_spline_grand_avg$Condition = revalue(df_spline_grand_avg$Condition, c("condition1"="Condition1", "condition2" = "Condition2"))
+df_spline_grand_avg$Condition = factor(df_spline_grand_avg$Condition, c("Condition1", "Condition2"))
+
+# get true population functions
+df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_pop.rds")
+
 # function
 df_spline_grand_avg %>%
   ggplot()+
-  geom_line(aes(x=norm_idx, y=value, group=condition, color=condition))+
-  xlab("time")+
-  ylab("y position")
+  geom_line(aes(x=(norm_idx-1)/(num_samples-1), y=value, group=Condition, color=Condition))+
+  labs(x = "Proportion of Movement", y = "Y Position", color = "Condition")+
+  geom_line(data=df_pop, aes(x = time, y = condition1), linetype = "longdash")+
+  geom_line(data=df_pop, aes(x = time, y = condition2), linetype = "longdash")
+  
 
 # take difference 
 df_spline_avg %>%
@@ -403,7 +350,7 @@ df_spline_grand_avg_effect %>%
   geom_line(aes(x=norm_idx, y=M), color = "purple")+
   geom_ribbon(aes(x=norm_idx, ymin=CI_lo, ymax=CI_hi), fill = "purple", alpha=0.5)+
   geom_hline(aes(yintercept = 0), linetype="dashed")+
-  geom_line(data=df_pop, aes(x = time/bin_width+1, y = effect), linetype = "longdash")+
+  # geom_line(data=df_pop, aes(x = time/bin_width+1, y = effect), linetype = "longdash")+
   xlab("time")+
   ylab("y position effect (condition1 - condition2)")+
   theme_gray(base_size = 20)+
@@ -412,6 +359,119 @@ df_spline_grand_avg_effect %>%
       , panel.grid.minor = element_line(size = 0)
       , panel.background = element_rect(fill = "white", color = "black")
     )
+
+
+# For MATLAB ----
+df_long_sim %>%
+  dplyr::select(id, condition, trial, coordinate, time, position) %>%
+  spread(coordinate, position) -> df_for_matlab2
+
+df_for_matlab2 %>%
+  dplyr::group_by() %>%
+  dplyr::mutate(
+    id = as.numeric(id)
+    , condition = as.numeric(condition)
+  ) -> df_for_matlab
+
+# convert trial to numeric
+df_for_matlab$trial = as.numeric(df_for_matlab$trial)
+
+# convert to matrix
+mat_long_trim = as.matrix(df_for_matlab[,c("id", "condition", "trial", "y")])
+
+# # save matrix as .mat file
+# write.csv(mat_long_trim, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/FDA/fake15_mat_long_trim.csv")
+
+# where is it significant? 
+df_spline_grand_avg_effect$sig
+
+# From MATLAB ----
+display_fanovan = function(filename, frames) {
+  # p-values
+  py = read.csv(sprintf('%s/py.csv', filename), header = F)
+  names(py) = c("p_value")
+
+  # y
+  y_nv = read.csv(sprintf('%s/y_nv.csv', filename), header = F)
+  names(y_nv) = c("y")
+  y_nv$condition = "no_vision"
+  y_v = read.csv(sprintf('%s/y_v.csv', filename), header = F)
+  names(y_v) = c("y")
+  y_v$condition = "vision"
+
+  # MSEs
+  y_MSE = read.csv(sprintf('%s/msy.csv', filename), header = F)
+  names(y_MSE) = c("mse")
+
+
+  # create data frames
+  nv = y_nv
+  v = y_v
+
+  fanovan =  rbind(nv, v)
+
+  fanovan$time = 0:(frames-1)/(frames-1)
+
+  # when is it significant?
+  py$sig = py$p_value < 0.05
+
+  # add to fanovan
+  fanovan$py_sig = py$sig
+
+  # how significant is it?
+  fanovan$py_val = py$p_value
+
+  # MSEs
+  fanovan$y_SE = sqrt(y_MSE$mse/n)
+
+  # t-value
+  tval = qt(1-0.025, n-1)
+
+  # change names and order of levels
+  fanovan$condition = revalue(fanovan$condition, c("no_vision"="Condition1", "vision" = "Condition2"))
+  fanovan$condition = factor(fanovan$condition, c("Condition1", "Condition2"))
+
+  for_plot1 = subset(fanovan, condition == "Condition1")
+  for_plot2 = subset(fanovan, condition == "Condition2")
+  # y vs. time
+  fanovan %>%
+    ggplot()+
+    geom_path(aes(x=time, y=y, group=condition, color=condition))+
+    # geom_area(data = subset(fanovan, condition == "V"), aes(x=time, y=as.numeric(py_sig)*max(y+y_SE*tval)), alpha = 0.2)+
+    # geom_area(data = subset(fanovan, condition == "V"), aes(x=time, y=as.numeric(py_sig)*min(y-y_SE*tval)), alpha = 0.2)+
+    annotate(
+      "rect"
+      , xmin=for_plot1$time[1]
+      , xmax=for_plot1$time[8]+1/(frames-1)/2
+      , ymin=min(for_plot2$y-for_plot2$y_SE*tval)
+      , ymax=max(for_plot1$y+for_plot1$y_SE*tval)
+      , alpha=0.2
+      )+ 
+    geom_ribbon(aes(x=time, ymin=y-y_SE*tval, ymax=y+y_SE*tval, group=condition, fill=condition), alpha = 0.2)+
+    geom_line(data=df_pop, aes(x = time, y = condition1), linetype = "longdash")+
+    geom_line(data=df_pop, aes(x = time, y = condition2), linetype = "longdash")+
+    labs(x = "Proportion of Movement", y = "Y Position", color = "Condition", fill = "Condition") -> gg
+  print(gg)
+
+  return(fanovan)
+}
+
+# run fanovan
+# fanovan_norm_time = display_fanovan('/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_results/fake_fanovan_norm_time_200', frames = 200)
+# fanovan_norm_time = display_fanovan('/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_results/fake_fanovan_norm_time_16', frames = num_samples)
+fanovan_norm_time = display_fanovan('/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/MSc_results/fake_fanovan_norm_time_15', frames = num_samples)
+
+# compare my functional anova analysis with fanovan
+df_spline_grand_avg_effecty = df_spline_grand_avg_effect[df_spline_grand_avg_effect$coordinate == "y",]
+
+# the analyses produce identical results
+plot(df_spline_grand_avg_effecty$sig - fanovan_norm_time[1:num_samples,]$py_sig, ylab = "y significance match")
+
+# NOTE: the p-values are somewhat different!
+# NOTE: this is likely because the normalization has a smoothing effect that only makes 
+# a difference for the fake_thesis data and not the fake_proposal data because the former is noisier!
+plot(df_spline_grand_avg_effecty$pval, ylab = "y p-value", ty = "l", col = "red")
+lines(fanovan_norm_time[1:num_samples,]$py_val, col = "blue")
 
 
 
@@ -430,19 +490,8 @@ df_spline_grand_avg_effect %>%
 #   round(x/z,0)*z
 # }
 
-# specify bin width
-bin_width = 1/15
-
-# # round time data given specified bin width 
-# df_long_sim$time_lores = round0(df_long_sim$time, bin_width)
-
 # define a new column if no binning is required (fake data)
 df_long_sim$time_lores = df_long_sim$time
-
-# # bin the time axis and averaged over position values within a bin, within a trial
-# df_long_sim %>% 
-#   group_by(id, coordinate, trial, time_lores, condition) %>%
-#   dplyr::summarise(position_bin = mean(position)) -> df_long_sim
 
 # define a new column if no binning is required (fake data)
 df_long_sim$position_bin = df_long_sim$position
@@ -571,7 +620,7 @@ for (si in 1:length(z_by_f_by_s)) {
 }
 
 # create a padded version of the z_by_f_by_s object so that the entry for each participant has the same number of observations
-z_by_f_by_s_pad = array(0,dim=c(20,10000))
+z_by_f_by_s_pad = array(0,dim=c(n,10000))
 for (si in 1:length(subj_obs)) {
   z_by_f_by_s_pad[si,] = c(z_by_f_by_s[[si]], rep(0, 10000 - subj_obs[si]))
 }
@@ -586,7 +635,7 @@ y = df_long_sim$position_bin
 y_by_s = array(split(y, s_index))
 
 # pad that data
-y_by_s_pad = array(0,dim=c(20,10000))
+y_by_s_pad = array(0,dim=c(n,10000))
 for (si in 1:length(subj_obs)) {
   y_by_s_pad[si,] = c(y_by_s[[si]], rep(0, 10000 - subj_obs[si]))
 }
@@ -607,7 +656,7 @@ data_for_stan = list(
 )
 
 # # package for cluster
-# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/previous_analyses/fake_proposal_15/fake_stan_data_proposal.Rdata")
+# save(data_for_stan, file = "/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_stan_data_thesis.Rdata")
 
 # # see 'cluster_analysis'
 # mod = rstan::stan_model("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Jenn Study/jenn_study/gp_regression.stan")
@@ -642,7 +691,7 @@ data_for_stan = list(
 # Examine Results ----
 
 # load stan fit object that was computed in the cloud
-load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_proposal_15/fake_proposal_post_500_15.rdata")
+load("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_thesis_post_1000_15_mtd15.rdata")
 
 
 
@@ -729,7 +778,7 @@ stan_summary(
 )
 
 # population mean function
-stan_summary(
+f_print = stan_summary(
   from_stan = post
   , par = c('f')
 )
@@ -741,16 +790,27 @@ stan_summary(
 )
 
 # participant mean functions
-stan_summary(
+subj_f_print = stan_summary(
   from_stan = post
   , par = c('subj_f')
 )
+subj_f_print = data.frame(subj_f_print)
+hist(subj_f_print$Rhat)
+range(subj_f_print$Rhat)
+hist(subj_f_print$n_eff)
+range(subj_f_print$n_eff)
 
 # participant noise functions
-stan_summary(
+noise_subj_f_print = stan_summary(
   from_stan = post
   , par = c('noise_subj_f')
 )
+noise_subj_f_print = data.frame(noise_subj_f_print)
+hist(noise_subj_f_print$Rhat)
+range(noise_subj_f_print$Rhat)
+hist(noise_subj_f_print$n_eff)
+range(noise_subj_f_print$n_eff)
+
 
 
 
@@ -782,13 +842,23 @@ get_50_HDI = function(y) {
 }
 
 # get violin plots
-get_violin = function(df, y_lab, samps = 16*500/2, hline = FALSE, facet = FALSE) {
+get_violin = function(df, y_lab, iseffect = F, hline = FALSE, facet = FALSE) {
   
   df$condition = factor(df$condition)
   
+  if (iseffect) {
+    df$condition = revalue(df$condition, c("effect" = "C1 - C2"))
+    x_lab = "Condition Effect"
+  }
+  else  {
+    df$condition = revalue(df$condition, c("condition1" = "C1", "condition2" = "C2"))
+    df$condition = factor(df$condition, c("C1", "C2"))
+    x_lab = "Condition"
+  }
+  
   gg = ggplot(data = df)+
     geom_violin(aes(x = condition, y = value))+
-    labs(x = "", y = y_lab)+
+    labs(x = x_lab, y = y_lab)+
     stat_summary(aes(x = condition, y = value), fun.data = get_95_HDI, size = 0.5)+
     stat_summary(aes(x = condition, y = value), fun.data = get_50_HDI, size = 1.5)
   
@@ -821,7 +891,7 @@ get_violin = function(df, y_lab, samps = 16*500/2, hline = FALSE, facet = FALSE)
 
 # Parameters ----
 
-# extract posterior samples 
+# extract posterior samples
 post_samples = rstan::extract(post)
 
 # population mean volatilty
@@ -834,19 +904,19 @@ volatilities %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> volatilities_c
 
-gg_volatilities = get_violin(volatilities_c, "volatility")
+gg_volatilities = get_violin(volatilities_c, "Volatility")
 
-gg_volatilities+ 
-  geom_segment(aes(x = 0.5, y = 1.12, xend = 1.5, yend = 1.12), linetype = 'dotted', size = 0.5)+ 
+gg_volatilities+
+  geom_segment(aes(x = 0.5, y = 1.12, xend = 1.5, yend = 1.12), linetype = 'dotted', size = 0.5)+
   geom_segment(aes(x = 1.5, y = 2.51, xend = 2.5, yend = 2.51), linetype = 'dotted', size = 0.5)
 
 volatilities %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> volatilities_e
 
-gg_volatilities_effect = get_violin(volatilities_e, "volatility effect", hline = T)
+gg_volatilities_effect = get_violin(volatilities_e, "Volatility", hline = T, iseffect = T)
 
-gg_volatilities_effect+ 
+gg_volatilities_effect+
   geom_segment(aes(x = 0.5, y = 1.12 - 2.51, xend = 1.5, yend = 1.12 - 2.51), linetype = 'dotted', size = 0.5)
 
 
@@ -860,19 +930,19 @@ amplitudes %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> amplitudes_c
 
-gg_amplitudes = get_violin(amplitudes_c, "amplitude")
+gg_amplitudes = get_violin(amplitudes_c, "Amplitude")
 
-gg_amplitudes+ 
-  geom_segment(aes(x = 0.5, y = 0.80, xend = 1.5, yend = 0.80), linetype = 'dotted', size = 0.5)+ 
+gg_amplitudes+
+  geom_segment(aes(x = 0.5, y = 0.80, xend = 1.5, yend = 0.80), linetype = 'dotted', size = 0.5)+
   geom_segment(aes(x = 1.5, y = 1.35, xend = 2.5, yend = 1.35), linetype = 'dotted', size = 0.5)
 
 amplitudes %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> amplitudes_e
 
-gg_amplitudes_effect = get_violin(amplitudes_e, "amplitude effect", hline = T)
+gg_amplitudes_effect = get_violin(amplitudes_e, "Amplitude", hline = T, iseffect = T)
 
-gg_amplitudes_effect+ 
+gg_amplitudes_effect+
   geom_segment(aes(x = 0.5, y = 0.80 - 1.35, xend = 1.5, yend = 0.80 - 1.35), linetype = 'dotted', size = 0.5)
 
 
@@ -886,7 +956,7 @@ subj_volatility_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> subj_volatility_sds_c
 
-gg_volatility_sds = get_violin(subj_volatility_sds_c, "participant volatility sd")
+gg_volatility_sds = get_violin(subj_volatility_sds_c, "Participant Volatility Variability (SD)")
 
 gg_volatility_sds+
   geom_segment(aes(x = 0.5, y = 0.71, xend = 1.5, yend = 0.71), linetype = 'dotted', size = 0.5)+
@@ -896,7 +966,7 @@ subj_volatility_sds %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> subj_volatility_sds_e
 
-gg_volatility_sds_effect = get_violin(subj_volatility_sds_e, "participant volatility sd effect", hline = T)
+gg_volatility_sds_effect = get_violin(subj_volatility_sds_e, "Participant Volatility Variability (SD)", hline = T, iseffect = T)
 
 gg_volatility_sds_effect+
   geom_segment(aes(x = 0.5, y = 0.71 - 1.14, xend = 1.5, yend = 0.71 - 1.14), linetype = 'dotted', size = 0.5)
@@ -912,7 +982,7 @@ subj_amplitude_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> subj_amplitude_sds_c
 
-gg_amplitude_sds = get_violin(subj_amplitude_sds_c, "participant amplitude sd")
+gg_amplitude_sds = get_violin(subj_amplitude_sds_c, "Participant Amplitude Variability (SD)")
 
 gg_amplitude_sds+
   geom_segment(aes(x = 0.5, y = 0.53, xend = 1.5, yend = 0.53), linetype = 'dotted', size = 0.5)+
@@ -922,7 +992,7 @@ subj_amplitude_sds %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> subj_amplitude_sds_e
 
-gg_amplitude_sds_effect = get_violin(subj_amplitude_sds_e, "participant amplitude sd effect", hline = T)
+gg_amplitude_sds_effect = get_violin(subj_amplitude_sds_e, "Participant Amplitude Variability (SD)", hline = T, iseffect = T)
 
 gg_amplitude_sds_effect+
   geom_segment(aes(x = 0.5, y = 0.53 - 0.43, xend = 1.5, yend = 0.53 - 0.43), linetype = 'dotted', size = 0.5)
@@ -938,7 +1008,7 @@ noise_volatilities %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> noise_volatilities_c
 
-gg_noise_volatilities = get_violin(noise_volatilities_c, "noise volatility")
+gg_noise_volatilities = get_violin(noise_volatilities_c, "Noise Volatility")
 
 gg_noise_volatilities+
   geom_segment(aes(x = 0.5, y = 0.85, xend = 1.5, yend = 0.85), linetype = 'dotted', size = 0.5)+
@@ -950,7 +1020,7 @@ noise_volatilities %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> noise_volatilities_e
 
-gg_noise_volatilities_effect = get_violin(noise_volatilities_e, "noise volatility effect", hline = T)
+gg_noise_volatilities_effect = get_violin(noise_volatilities_e, "Noise Volatility", hline = T, iseffect = T)
 
 gg_noise_volatilities_effect+
   geom_segment(aes(x = 0.5, y = 0.85-1.81, xend = 1.5, yend = 0.85-1.81), linetype = 'dotted', size = 0.5)
@@ -968,7 +1038,7 @@ noise_amplitudes %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> noise_amplitudes_c
 
-gg_noise_amplitudes = get_violin(noise_amplitudes_c, "noise amplitude")
+gg_noise_amplitudes = get_violin(noise_amplitudes_c, "Noise Amplitude")
 
 gg_noise_amplitudes+
   geom_segment(aes(x = 0.5, y = 1, xend = 1.5, yend = 1), linetype = 'dotted', size = 0.5)+
@@ -980,7 +1050,7 @@ noise_amplitudes %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> noise_amplitudes_e
 
-gg_noise_amplitudes_effect = get_violin(noise_amplitudes_e, "noise amplitude effect", hline = T)
+gg_noise_amplitudes_effect = get_violin(noise_amplitudes_e, "Noise Amplitude", hline = T, iseffect = T)
 
 gg_noise_amplitudes_effect+
   geom_segment(aes(x = 0.5, y = 1-1, xend = 1.5, yend = 1-1), linetype = 'dotted', size = 0.5)
@@ -998,7 +1068,7 @@ noise_subj_volatility_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> noise_subj_volatility_sds_c
 
-gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds_c, "noise participant volatility sd")
+gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds_c, "Noise Participant Volatility Variability (SD)")
 
 gg_noise_volatility_sds+
   geom_segment(aes(x = 0.5, y = 1.2, xend = 1.5, yend = 1.2), linetype = 'dotted', size = 0.5)+
@@ -1008,7 +1078,7 @@ noise_subj_volatility_sds %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> noise_subj_volatility_sds_e
 
-gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "noise participant volatility sd effect", hline = T)
+gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "Noise Participant Volatility Variability (SD)", iseffect = T, hline = T)
 
 gg_noise_volatility_sds_effect+
   geom_segment(aes(x = 0.5, y = 1.2-0.8, xend = 1.5, yend = 1.2-0.8), linetype = 'dotted', size = 0.5)
@@ -1024,7 +1094,7 @@ noise_subj_amplitude_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> noise_subj_amplitude_sds_c
 
-gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds_c, "noise participant amplitude sd")
+gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds_c, "Noise Participant Amplitude Variability (SD)")
 
 gg_noise_amplitude_sds+
   geom_segment(aes(x = 0.5, y = 0.43, xend = 1.5, yend = 0.43), linetype = 'dotted', size = 0.5)+
@@ -1034,7 +1104,7 @@ noise_subj_amplitude_sds %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> noise_subj_amplitude_sds_e
 
-gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "noise participant amplitude sd effect", hline = T)
+gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "Noise Participant Amplitude Variability (SD)", iseffect = T, hline = T)
 
 gg_noise_amplitude_sds_effect+
   geom_segment(aes(x = 0.5, y = 0.43-0.53, xend = 1.5, yend = 0.43-0.53), linetype = 'dotted', size = 0.5)
@@ -1064,7 +1134,7 @@ for (si in 1:dim(subj_f)[2]) {
 subj_f_1 = subj_condition1 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 1
   )
 
@@ -1080,7 +1150,7 @@ for (si in 1:dim(subj_f)[2]) {
 subj_f_2 = subj_condition2 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 2
   )
 
@@ -1102,7 +1172,7 @@ subj_to_plot = subj_f_sum %>%
     , hi95_1 = quantile(condition1,.975)
     , lo50_1 = quantile(condition1,.25)
     , hi50_1 = quantile(condition1,.75)
-
+    
     , med_2 = median(condition2)
     , lo95_2 = quantile(condition2,.025)
     , hi95_2 = quantile(condition2,.975)
@@ -1110,11 +1180,9 @@ subj_to_plot = subj_f_sum %>%
     , hi50_2 = quantile(condition2,.75)
   )
 
-# load real population means
-df_subj = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_proposal_15/fake_data_proposal_subj.rds")
+# get population parameters
+df_subj= readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_subj.rds")
 df_subj %>%
-  group_by(id, condition) %>%
-  # dplyr::mutate(value = value - value[time == 0]) %>%
   spread(condition, value) -> df_subj
 
 subj_to_plot %>%
@@ -1122,12 +1190,11 @@ subj_to_plot %>%
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_long_sim_avg, condition == "condition1"), aes(x=time/bin_width+1, y=position_avg, group = id), size = 0.5, color = "gray50")+
-  geom_line(data=df_subj, aes(x = time/bin_width+1, y = condition1, group = id), linetype = "longdash")+
-  ylab('position')+
-  ylim(c(-3, 2.5))+
-  xlab('time')+
-  ggtitle('condition 1')+
+  geom_line(data = subset(df_long_sim_avg, condition == "condition1"), aes(x=time, y=position_avg, group = id), size = 0.5, color = "gray50")+
+  geom_line(data=df_subj, aes(x = time, y = condition1, group = id), linetype = "longdash")+
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
+  ggtitle('Condition 1')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1137,40 +1204,6 @@ subj_to_plot %>%
   ) ->p1
 print(p1)
 
-# # figure out participant details
-# p1cols = ggplot_build(p1)$data[[1]]
-# 
-# # just pick one subject
-# subj_to_plot %>%
-#   group_by(id) %>%
-#   dplyr::summarise(mins = min(med_1)) %>%
-#   dplyr::summarise(idx = which.min(mins))
-# 
-# subj_to_plot %>%
-#   dplyr::filter(id == 11, time >=8, time <=10) -> subj_to_plot_11
-# 
-# p1cols %>%
-#   dplyr::filter(group ==11, x == 1)
-# 
-# subj_to_plot_11 %>%
-#   ggplot()+
-#   geom_line(aes(x=time, y=med_1), color = '#00BFC4', size = 2)+
-#   geom_line(aes(x=time, y=hi95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-#   geom_line(aes(x=time, y=lo95_1), color = '#00BFC4', linetype = "dashed", size = 2)+
-#   geom_line(data = subset(df_long_sim_avg, condition == "condition1" & id == 11 & time/bin_width+1 >=8 & time/bin_width+1 <=10), aes(x=time/bin_width+1, y=position_avg, group = id), size = 2, color = "gray50")+
-#   geom_line(data = subset(df_subj, id == 11 & time/bin_width+1 >= 8 & time/bin_width+1 <= 10), aes(x = time/bin_width+1, y = condition1, group = id), size = 2, linetype = "longdash")+
-#   ylab('')+
-#   xlab('')+
-#   theme_gray(base_size = 20)+
-#   theme(
-#     panel.grid.major = element_line(size = 0)
-#     , panel.grid.minor = element_line(size = 0)
-#     , axis.ticks = element_line(size = 0)
-#     , axis.text = element_blank()
-#     , legend.position = "none"
-#     , panel.border = element_rect(size = 2, fill = NA)
-#     , panel.background = element_rect(fill = "white", color = "black")
-#   )
 
 # condition 2
 subj_to_plot %>%
@@ -1178,12 +1211,11 @@ subj_to_plot %>%
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_long_sim_avg, condition == "condition2"), aes(x=time/bin_width+1, y=position_avg, group = id ),size = 0.5, color = "gray50")+
-  geom_line(data=df_subj, aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash")+
-  ylab('position')+
-  ylim(c(-5, 2.5))+
-  xlab('time')+
-  ggtitle('condition 2')+
+  geom_line(data = subset(df_long_sim_avg, condition == "condition2"), aes(x=time, y=position_avg, group = id), size = 0.5, color = "gray50")+
+  geom_line(data=df_subj, aes(x = time, y = condition2, group = id), linetype = "longdash")+
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
+  ggtitle('Condition 2')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1193,40 +1225,6 @@ subj_to_plot %>%
   ) -> p2
 print(p2)
 
-# # figure out participant details
-# p2cols = ggplot_build(p2)$data[[1]]
-# 
-# # just pick one subject
-# subj_to_plot %>%
-#   group_by(id) %>%
-#   dplyr::summarise(mins = min(med_2)) %>%
-#   dplyr::summarise(idx = which.min(mins))
-# 
-# subj_to_plot %>%
-#   dplyr::filter(id == 6, time >=1, time <=3) -> subj_to_plot_6
-# 
-# p1cols %>%
-#   dplyr::filter(group ==6, x == 1)
-# 
-# subj_to_plot_6 %>%
-#   ggplot()+
-#   geom_line(aes(x=time, y=med_2), color = '#7CAE00', size = 2)+
-#   geom_line(aes(x=time, y=hi95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-#   geom_line(aes(x=time, y=lo95_2), color = '#7CAE00', linetype = "dashed", size = 2)+
-#   geom_line(data = subset(df_long_sim_avg, condition == "condition2" & id == 6 & time/bin_width+1 >=1 & time/bin_width+1 <=3), aes(x=time/bin_width+1, y=position_avg, group = id), size = 2, color = "gray50")+
-#   geom_line(data = subset(df_subj, id == 6 & time/bin_width+1 >=1 & time/bin_width+1 <=3), aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash", size = 2)+
-#   ylab('')+
-#   xlab('')+
-#   theme_gray(base_size = 20)+
-#   theme(
-#     panel.grid.major = element_line(size = 0)
-#     , panel.grid.minor = element_line(size = 0)
-#     , axis.ticks = element_line(size = 0)
-#     , axis.text = element_blank()
-#     , legend.position = "none"
-#     , panel.border = element_rect(size = 2, fill = NA)
-#     , panel.background = element_rect(fill = "white", color = "black")
-#   )
 
 
 
@@ -1250,9 +1248,9 @@ for (si in 1:dim(noise_subj_f)[2]) {
 noise_subj_f_1 = noise_subj_condition1 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 1
-)
+  )
 
 # condition2
 noise_subj_condition2 = NULL
@@ -1266,7 +1264,7 @@ for (si in 1:dim(noise_subj_f)[2]) {
 noise_subj_f_2 = noise_subj_condition2 %>%
   gather(key="time", value="value", -c(sample, id)) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 2
   )
 
@@ -1288,7 +1286,7 @@ noise_subj_to_plot = noise_subj_f_sum %>%
     , hi95_1 = quantile(condition1,.975)
     , lo50_1 = quantile(condition1,.25)
     , hi50_1 = quantile(condition1,.75)
-
+    
     , med_2 = median(condition2)
     , lo95_2 = quantile(condition2,.025)
     , hi95_2 = quantile(condition2,.975)
@@ -1300,13 +1298,13 @@ noise_subj_to_plot = noise_subj_f_sum %>%
 df_long_sim$position_bin_scaled = df_long_sim$position_bin
 
 df_long_sim %>%
-  group_by(id, time_lores, condition) %>%
+  group_by(id, time, condition) %>%
   dplyr::summarise(
-    SD = log(sd(position_bin_scaled))
+    SD = log(sd(position))
   ) -> noise_df_long_sim
 
 # get population parameters
-df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_proposal_15/fake_data_proposal_subj_noise.rds")
+df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_subj_noise.rds")
 df_subj_noise %>%
   spread(condition, value) -> df_subj_noise
 
@@ -1315,11 +1313,11 @@ noise_subj_to_plot %>%
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_sim, condition == "condition1"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
-  geom_line(data=df_subj_noise, aes(x = time/bin_width+1, y = condition1, group = id), linetype = "longdash")+
-  ylab('log standard deviation')+
-  xlab('time')+
-  ggtitle('condition 1')+
+  geom_line(data = subset(noise_df_long_sim, condition == "condition1"), aes(x=time, y=SD, group = id), size = 0.5, color = "gray50")+
+  geom_line(data=df_subj_noise, aes(x = time, y = condition1, group = id), linetype = "longdash")+
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Movement')+
+  ggtitle('Condition 1')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1333,11 +1331,11 @@ noise_subj_to_plot %>%
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
   geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
   geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_sim, condition == "condition2"), aes(x=time_lores/bin_width+1, y=SD, group = id), size = 0.5, color = "gray50")+
-  geom_line(data=df_subj_noise, aes(x = time/bin_width+1, y = condition2, group = id), linetype = "longdash")+
-  ylab('log standard deviation')+
-  xlab('time')+
-  ggtitle('condition 2')+
+  geom_line(data = subset(noise_df_long_sim, condition == "condition2"), aes(x=time, y=SD, group = id), size = 0.5, color = "gray50")+
+  geom_line(data=df_subj_noise, aes(x = time, y = condition2, group = id), linetype = "longdash")+
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Movement')+
+  ggtitle('Condition 2')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1345,7 +1343,6 @@ noise_subj_to_plot %>%
     , legend.position = "none"
     , panel.background = element_rect(fill = "white", color = "black")
   )
-
 
 
 
@@ -1369,7 +1366,7 @@ condition1$sample = 1:nrow(condition1)
 f_1 = condition1 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 1
   )
 
@@ -1379,7 +1376,7 @@ condition2$sample = 1:nrow(condition2)
 f_2 = condition2 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 2
   )
 
@@ -1400,7 +1397,7 @@ to_plot = f_sum %>%
     , hi95_1 = quantile(condition1,.975)
     , lo50_1 = quantile(condition1,.25)
     , hi50_1 = quantile(condition1,.75)
-
+    
     , med_2 = median(condition2)
     , lo95_2 = quantile(condition2,.025)
     , hi95_2 = quantile(condition2,.975)
@@ -1408,25 +1405,15 @@ to_plot = f_sum %>%
     , hi50_2 = quantile(condition2,.75)
   )
 
-# load real population means
-df_pop = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_proposal_15/fake_data_proposal_pop.rds")
-
-# # if real data, then set to zero
-# df_pop %>%
-#   dplyr::mutate(
-#     condition1 = condition1 - condition1[time == 0]
-#     , condition2 = condition2 - condition2[time == 0]
-#   ) -> df_pop
-
 to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1), color = "turquoise")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
-  geom_line(data=subset(df_long_sim_grand_avg, condition == "condition1"), aes(x=time/bin_width+1, y=position_grand_avg), size = 0.5, color = "grey50")+
-  geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition1), linetype = "longdash")+
-  ylab('position')+
-  xlab('time')+
-  ggtitle('condition1')+
+  geom_line(data = subset(df_long_sim_grand_avg, condition == "condition1"), aes(x=time, y=position_grand_avg), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop, aes(x = time, y = condition1), linetype = "longdash")+  
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
+  ggtitle('Condition 1')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1439,11 +1426,11 @@ to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  geom_line(data=subset(df_long_sim_grand_avg, condition == "condition2"), aes(x=time/bin_width+1, y=position_grand_avg), size = 0.5, color = "grey50")+
-  geom_line(data=df_pop, aes(x = time/bin_width+1, y = condition2), linetype = "longdash")+
-  ylab('position')+
-  xlab('time')+
-  ggtitle('condition2')+
+  geom_line(data = subset(df_long_sim_grand_avg, condition == "condition2"), aes(x=time, y=position_grand_avg), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop, aes(x = time, y = condition2), linetype = "longdash")+    
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
+  ggtitle('Condition 2')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1459,17 +1446,20 @@ to_plot %>%
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  annotate("text", label = "condition1", x = 2, y = -0.15, color = "turquoise")+
-  annotate("text", label = "condition2", x = 6, y = -0.75, color = "red")+
-  ylab('position')+
-  xlab('time')+
+  annotate("text", label = "Condition 1", x = 3/15, y = -0, color = "turquoise")+
+  annotate("text", label = "Condition 2", x = 8/15, y = -2, color = "red")+
+  geom_line(data = subset(df_long_sim_grand_avg, condition == "condition1"), aes(x=time, y=position_grand_avg), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop, aes(x = time, y = condition1), linetype = "longdash")+   
+  geom_line(data = subset(df_long_sim_grand_avg, condition == "condition2"), aes(x=time, y=position_grand_avg), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop, aes(x = time, y = condition2), linetype = "longdash")+   
+  ylab('Scaled Position')+
+  xlab('Proportion of Movement')+ 
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
     , panel.grid.minor = element_line(size = 0)
     , panel.background = element_rect(fill = "white", color = "black")
   )
-
 
 # summarize to get difference
 f_sum %>%
@@ -1493,14 +1483,21 @@ to_plot_effect = f_sum_effect %>%
 # get effect
 df_pop$effect = df_pop$condition1 - df_pop$condition2
 
-# plot effect
+# get empirical difference as well
+df_long_sim_grand_avg %>%
+  dplyr::group_by(time) %>%
+  dplyr::summarise(
+    effect = position_grand_avg[condition == "condition1"] - position_grand_avg[condition == "condition2"]
+  ) -> df_long_sim_condition_effect
+
 to_plot_effect %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1), color = "purple")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "purple", alpha=0.5)+
-  geom_line(data=df_pop, aes(x = time/bin_width+1, y = effect), linetype = "longdash")+
-  ylab('position effect (condition1 - condition2)')+
-  xlab('time')+
+  ylab('Scaled Position (C1 - C2)')+
+  xlab('Proportion of Movement')+ 
+  geom_line(data = df_long_sim_condition_effect, aes(x=time, y=effect), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop, aes(x = time, y = effect), linetype = "longdash")+   
   geom_hline(yintercept = 0, linetype = "dashed")+
   theme_gray(base_size = 20)+
   theme(
@@ -1508,7 +1505,6 @@ to_plot_effect %>%
     , panel.grid.minor = element_line(size = 0)
     , panel.background = element_rect(fill = "white", color = "black")
   )
-
 
 
 
@@ -1524,7 +1520,7 @@ noise_condition1$sample = 1:nrow(noise_condition1)
 noise_f_1 = noise_condition1 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 1
   )
 
@@ -1534,7 +1530,7 @@ noise_condition2$sample = 1:nrow(noise_condition2)
 noise_f_2 = noise_condition2 %>%
   gather(key="time", value="value", -sample) %>%
   dplyr::mutate(
-    time= as.numeric(gsub('X','',time))
+    time= (as.numeric(gsub('X','',time))-1)*bin_width
     , condition = 2
   )
 
@@ -1555,7 +1551,7 @@ noise_to_plot = noise_f_sum %>%
     , hi95_1 = quantile(condition1,.975)
     , lo50_1 = quantile(condition1,.25)
     , hi50_1 = quantile(condition1,.75)
-
+    
     , med_2 = median(condition2)
     , lo95_2 = quantile(condition2,.025)
     , hi95_2 = quantile(condition2,.975)
@@ -1564,23 +1560,20 @@ noise_to_plot = noise_f_sum %>%
   )
 
 noise_df_long_sim %>%
-  group_by(time_lores, condition) %>%
+  group_by(time, condition) %>%
   dplyr::summarise(
     avg_SD = mean(SD)
   ) -> subj_noise
-
-# load real population means
-df_pop_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_proposal_15/fake_data_proposal_pop_noise.rds")
 
 noise_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1), color = "turquoise")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
-  geom_line(data=subset(subj_noise, condition == "condition1"), aes(x=time_lores/bin_width+1, y=avg_SD), size = 0.5, color = "gray50")+
-  geom_line(data=df_pop_noise, aes(x=time/bin_width+1, y=condition1), linetype = "longdash")+
-  ylab('log standard deviation')+
-  xlab('time')+
-  ggtitle('condition1')+
+  geom_line(data = subset(subj_noise, condition == "condition1"), aes(x=time, y=avg_SD), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop_noise, aes(x = time, y = condition1), linetype = "longdash")+    
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Time')+
+  ggtitle('Condition 1')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1593,11 +1586,10 @@ noise_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  geom_line(data=subset(subj_noise, condition == "condition2"), aes(x=time_lores/bin_width+1, y=avg_SD), size = 0.5, color = "gray50")+
-  geom_line(data=df_pop_noise, aes(x=time/bin_width+1, y=condition2), linetype = "longdash")+
-  ylab('log standard deviation')+
-  xlab('time')+
-  ggtitle('condition2')+
+  geom_line(data = subset(subj_noise, condition == "condition2"), aes(x=time, y=avg_SD), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop_noise, aes(x = time, y = condition2), linetype = "longdash")+   ylab('Log Standard Deviation')+
+  xlab('Proportion of Time')+
+  ggtitle('Condition 2')+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1613,10 +1605,14 @@ noise_to_plot %>%
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1),fill = "turquoise", alpha=0.5)+
   geom_line(aes(x=time, y=med_2), color = "red")+
   geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  ylab('log standard deviation')+
-  xlab('time')+
-  annotate("text", label = "condition1", x = 3, y = -1.0, color = "turquoise")+
-  annotate("text", label = "condition2", x = 5, y = 0, color = "red")+
+  geom_line(data = subset(subj_noise, condition == "condition1"), aes(x=time, y=avg_SD), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop_noise, aes(x = time, y = condition1), linetype = "longdash")+    
+  geom_line(data = subset(subj_noise, condition == "condition2"), aes(x=time, y=avg_SD), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop_noise, aes(x = time, y = condition2), linetype = "longdash")+  
+  ylab('Log Standard Deviation')+
+  xlab('Proportion of Time')+
+  annotate("text", label = "Condition 1", x = 12/15, y = -0.4, color = "turquoise")+
+  annotate("text", label = "Condition 2", x = 4/15, y = 0.6, color = "red")+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
@@ -1647,13 +1643,21 @@ noise_to_plot_effect = noise_f_sum_effect %>%
 # get true population effect
 df_pop_noise$effect = df_pop_noise$condition1 - df_pop_noise$condition2
 
+# get empirical effect
+subj_noise %>%
+  dplyr::group_by(time) %>%
+  dplyr::summarise(
+    effect = avg_SD[condition == "condition1"] - avg_SD[condition == "condition2"]
+  ) -> subj_noise_effect
+
 noise_to_plot_effect %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1), color = "purple")+
   geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "purple", alpha=0.5)+
-  geom_line(data=df_pop_noise, aes(x=time/bin_width+1, y=effect), linetype = "longdash")+
-  ylab('log standard deviation effect (condition1 - condition2)')+
-  xlab('time')+
+  geom_line(data = subj_noise_effect, aes(x=time, y=effect), size = 0.5, color = "gray50")+
+  geom_line(data=df_pop_noise, aes(x = time, y = effect), linetype = "longdash")+
+  ylab('Log Standard Deviation (C1 - C2)')+
+  xlab('Proportion of Time')+
   geom_hline(yintercept = 0, linetype = "dashed")+
   theme_gray(base_size = 20)+
   theme(
@@ -1661,5 +1665,7 @@ noise_to_plot_effect %>%
     , panel.grid.minor = element_line(size = 0)
     , panel.background = element_rect(fill = "white", color = "black")
   )
+
+
 
 
