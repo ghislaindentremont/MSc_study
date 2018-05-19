@@ -1050,7 +1050,7 @@ mean(df_long_velo$id == df_long_clean$id)
 mean(df_long_velo$trial == df_long_clean$trial)
 mean(df_long_velo$time == df_long_clean$time)
 
-df_long_velo %>%
+df_long_velo %>% 
   ungroup() %>%
   dplyr::select(non_stationary, stationary, greater_than_zero) %>%
   bind_cols(df_long_clean) -> df_long_clean
@@ -1119,18 +1119,33 @@ df_long_clean %>%
   ) -> df_long_clean
 
 # identify trials that do not contain trial start or trial end
+# count number of trials to be discarded based on trial start OR trial ends
 df_long_clean %>%
   dplyr::filter(coordinate == "y_inter") %>%
   dplyr::group_by(pilot, id, condition, trial) %>%
   dplyr::summarise(
     bad_start = is.na(unique(real_trial_start))
     , bad_end = is.na(unique(real_trial_end))
+    , bad_trial = is.na(unique(real_trial_start)) | is.na(unique(real_trial_end))
   ) %>%
   dplyr::group_by(pilot, id, condition) %>%
   dplyr::summarise(
     bad_starts = sum(bad_start)
     , bad_ends = sum(bad_end)
-  ) %>% print(n=n*2)
+    , bad_trials = sum(bad_trial)
+  ) %>% print(n=n*2) %>%
+  dplyr::group_by(pilot,id) %>%
+  dplyr::summarise(
+    bad_starts_tot = sum(bad_starts)
+    , bad_ends_tot = sum(bad_ends)
+    , bad_trials_tot = sum(bad_trials)
+  ) %>% print(n=n) %>%
+  dplyr::summarise(
+    bad_starts_pop = sum(bad_starts_tot)
+    , bad_ends_pop = sum(bad_ends_tot)
+    , bad_trials_pop = sum(bad_trials_tot)
+  ) %>% print(n=n)
+  
 
 # identify trials that don't have proper start and end cutoffs
 df_long_clean %>%
@@ -1454,6 +1469,10 @@ plot_norm(21:33, "x_inter", "norm_position", "x position (mm)")
 plot_norm(1:10, "y_inter", "norm_position", "y position (mm)")
 plot_norm(11:20, "y_inter", "norm_position", "y position (mm)")
 plot_norm(21:33, "y_inter", "norm_position", "y position (mm)")
+# P33 appears to be the outlying one from the data
+# when comparing to the other trajectories, it appears that 33 overshoots the target more often
+# this would explain why the average presented below appears to peak earlier than it should
+plot_norm(33, "y_inter", "norm_position", "y position (mm)")
 # Z
 plot_norm(1:10, "z_inter", "norm_position", "z position (mm)")
 plot_norm(11:20, "z_inter", "norm_position", "z position (mm)")
@@ -1513,6 +1532,8 @@ plot_norm_avg(21:33, "x_inter", "position_avg", "x position (mm)")
 plot_norm_avg(1:10, "y_inter", "position_avg", "y position (mm)")
 plot_norm_avg(11:20, "y_inter", "position_avg", "y position (mm)")
 plot_norm_avg(21:33, "y_inter", "position_avg", "y position (mm)")
+# P33 appears to be the outlying one from the data
+plot_norm_avg(33, "y_inter", "position_avg", "y position (mm)")
 # Z
 plot_norm_avg(1:10, "z_inter", "position_avg", "z position (mm)")
 plot_norm_avg(11:20, "z_inter", "position_avg", "z position (mm)")
@@ -1932,7 +1953,7 @@ do_anovas = function(dv, YL, XL, SL) {
     , dv = temp
     , wid = id
     , within = condition
-    # , between = blocking
+    , between = blocking
     # , return_aov = T
   )
   print(ez_print)
@@ -1941,9 +1962,9 @@ do_anovas = function(dv, YL, XL, SL) {
     , dv = temp
     , wid = id
     , within = condition
-    # , between = blocking
+    , between = blocking
     , x = condition
-    # , split = blocking
+    , split = blocking
     , do_bar = T
     , y_lab = YL
     , x_lab = XL
@@ -3609,14 +3630,13 @@ subj_to_plot = subj_f_sum %>%
     , hi50_2 = quantile(condition2,.75)
   )
 
-
 subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
   # geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = factor(id), alpha=0.2)+
-  geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_id_meansy, condition == "vision"), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 0.5, color = "gray50")+
+  # geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
+  # geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
+  # geom_line(data = subset(df_id_meansy, condition == "vision"), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 0.5, color = "gray50")+
   ylab('Scaled Position')+
   xlab('Proportion of Movement')+ 
   ggtitle('Vision')+
@@ -3630,52 +3650,52 @@ subj_to_plot %>%
 print(p1)
 
 
-# figure out participant details
-p1cols = ggplot_build(p1)$data[[1]]
-
-# get range
-lo=0.5
-hi=0.7
-
-# just pick one subject
-subj_to_plot %>%
-  group_by(id) %>%
-  dplyr::filter(time > lo, time < hi) %>%
-  dplyr::summarise(mins = min(med_1)) %>%
-  dplyr::summarise(idx = which.min(mins)) -> p1_id2
-p1_id = p1_id2[[1]]
-
-subj_to_plot %>%
-  dplyr::filter(id == p1_id, time >=lo, time <=hi) -> subj_to_plot_id
-
-p1cols %>%
-  dplyr::filter(group ==p1_id, x == 1) -> p1_id_col2
-p1_id_col = p1_id_col2$colour
-
-# get id for df_id_meansy
-# NOTE: stan id and df id will not necessarily match (some participant numbers removed)
-id_list = as.numeric(sort(unique(df_id_meansy$id)))
-df_id = id_list[p1_id]
-
-# plot
-subj_to_plot_id %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med_1), color = p1_id_col, size = 2)+
-  geom_line(aes(x=time, y=hi95_1), color = p1_id_col, linetype = "dashed", size = 2)+
-  geom_line(aes(x=time, y=lo95_1), color = p1_id_col, linetype = "dashed", size = 2)+
-  geom_line(data = subset(df_id_meansy, condition == "vision" & id == df_id & time_lores >=lo & time_lores <=hi), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
-  ylab('')+
-  xlab('')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , axis.ticks = element_line(size = 0)
-    , axis.text = element_blank()
-    , legend.position = "none"
-    , panel.border = element_rect(size = 2, fill = NA)
-    , panel.background = element_rect(fill = "white", color = "black")
-  )
+# # figure out participant details
+# p1cols = ggplot_build(p1)$data[[1]]
+# 
+# # get range
+# lo=0.5
+# hi=0.7
+# 
+# # just pick one subject
+# subj_to_plot %>%
+#   group_by(id) %>%
+#   dplyr::filter(time > lo, time < hi) %>%
+#   dplyr::summarise(mins = min(med_1)) %>%
+#   dplyr::summarise(idx = which.min(mins)) -> p1_id2
+# p1_id = p1_id2[[1]]
+# 
+# subj_to_plot %>%
+#   dplyr::filter(id == p1_id, time >=lo, time <=hi) -> subj_to_plot_id
+# 
+# p1cols %>%
+#   dplyr::filter(group ==p1_id, x == 1) -> p1_id_col2
+# p1_id_col = p1_id_col2$colour
+# 
+# # get id for df_id_meansy
+# # NOTE: stan id and df id will not necessarily match (some participant numbers removed)
+# id_list = as.numeric(sort(unique(df_id_meansy$id)))
+# df_id = id_list[p1_id]
+# 
+# # plot
+# subj_to_plot_id %>%
+#   ggplot()+
+#   geom_line(aes(x=time, y=med_1), color = p1_id_col, size = 2)+
+#   geom_line(aes(x=time, y=hi95_1), color = p1_id_col, linetype = "dashed", size = 2)+
+#   geom_line(aes(x=time, y=lo95_1), color = p1_id_col, linetype = "dashed", size = 2)+
+#   geom_line(data = subset(df_id_meansy, condition == "vision" & id == df_id & time_lores >=lo & time_lores <=hi), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
+#   ylab('')+
+#   xlab('')+
+#   theme_gray(base_size = 20)+
+#   theme(
+#     panel.grid.major = element_line(size = 0)
+#     , panel.grid.minor = element_line(size = 0)
+#     , axis.ticks = element_line(size = 0)
+#     , axis.text = element_blank()
+#     , legend.position = "none"
+#     , panel.border = element_rect(size = 2, fill = NA)
+#     , panel.background = element_rect(fill = "white", color = "black")
+#   )
 
 
 
@@ -3684,9 +3704,9 @@ subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
   # geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = factor(id), alpha=0.2)+
-  geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_id_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_avg, group = id ),size = 0.5, color = "gray50")+
+  # geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
+  # geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
+  # geom_line(data = subset(df_id_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_avg, group = id ),size = 0.5, color = "gray50")+
   ylab('Scaled Position')+
   xlab('Proportion of Movement')+ 
   ggtitle('No Vision')+
@@ -3700,50 +3720,88 @@ subj_to_plot %>%
 print(p2)
 
 
-# figure out participant details
-p2cols = ggplot_build(p2)$data[[1]]
+# # figure out participant details
+# p2cols = ggplot_build(p2)$data[[1]]
+# 
+# # get range
+# lo2=0.3
+# hi2=0.5
+# 
+# # just pick one subject
+# subj_to_plot %>%
+#   group_by(id) %>%
+#   dplyr::filter(time > lo2, time < hi2) %>%
+#   dplyr::summarise(maxs = max(med_2)) %>%
+#   dplyr::summarise(idx = which.max(maxs)) -> p2_id2
+# p2_id = p2_id2[[1]]
+# 
+# subj_to_plot %>%
+#   dplyr::filter(id == p2_id, time >=lo2, time <=hi2) -> subj_to_plot_id2
+# 
+# p2cols %>%
+#   dplyr::filter(group ==p2_id, x == 1) -> p2_id_col2
+# p2_id_col = p2_id_col2$colour
+# 
+# # get id for df_id_meansy
+# # NOTE: stan id and df id will not necessarily match (some participant numbers removed)
+# df_id2 = id_list[p2_id]
+# 
+# subj_to_plot_id2 %>%
+#   ggplot()+
+#   geom_line(aes(x=time, y=med_2), color = p2_id_col, size = 2)+
+#   geom_line(aes(x=time, y=hi95_2), color = p2_id_col, linetype = "dashed", size = 2)+
+#   geom_line(aes(x=time, y=lo95_2), color = p2_id_col, linetype = "dashed", size = 2)+
+#   geom_line(data = subset(df_id_meansy, condition == "no_vision" & id == df_id2 & time_lores >=lo2 & time_lores <=hi2), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
+#   ylab('')+
+#   xlab('')+
+#   theme_gray(base_size = 20)+
+#   theme(
+#     panel.grid.major = element_line(size = 0)
+#     , panel.grid.minor = element_line(size = 0)
+#     , axis.ticks = element_line(size = 0)
+#     , axis.text = element_blank()
+#     , legend.position = "none"
+#     , panel.border = element_rect(size = 2, fill = NA)
+#     , panel.background = element_rect(fill = "white", color = "black")
+#   )
 
-# get range
-lo2=0.3
-hi2=0.5
+# need to order participant IDs from 1 to 29 for df_id_meansy
+df_id_meansy$orig_id = df_id_meansy$id
+df_id_meansy$id = factor(as.numeric(droplevels(df_id_meansy$id)))
 
-# just pick one subject
-subj_to_plot %>%
-  group_by(id) %>%
-  dplyr::filter(time > lo2, time < hi2) %>%
-  dplyr::summarise(maxs = max(med_2)) %>%
-  dplyr::summarise(idx = which.max(maxs)) -> p2_id2
-p2_id = p2_id2[[1]]
+by_subj = function(id_lo, id_hi) {
+  subj_to_plot %>%
+    dplyr::filter(id <= id_hi, id >= id_lo) %>%
+    ggplot()+
+    geom_line(aes(x=time, y=med_1, group = factor(id)), color = "turquoise")+
+    geom_line(aes(x=time, y=hi95_1, group = factor(id)), linetype = "dashed", color = "turquoise")+
+    geom_line(aes(x=time, y=lo95_1, group = factor(id)), linetype = "dashed", color = "turquoise")+
+    geom_line(data = subset(df_id_meansy, condition == "vision" & as.numeric(id) <= id_hi & as.numeric(id) >= id_lo), aes(x=time_lores, y=position_bin_scale_avg, group = id ),size = 0.5, color = "gray50")+
+    geom_line(aes(x=time, y=med_2, group = factor(id)), color = "red")+
+    geom_line(aes(x=time, y=hi95_2, group = factor(id)), linetype = "dashed", color = "red")+
+    geom_line(aes(x=time, y=lo95_2, group = factor(id)), linetype = "dashed", color = "red")+
+    geom_line(data = subset(df_id_meansy, condition == "no_vision" & as.numeric(id) <= id_hi & as.numeric(id) >= id_lo), aes(x=time_lores, y=position_bin_scale_avg, group = id ),size = 0.5, color = "gray50")+
+    ylab('Scaled Position')+
+    xlab('Proportion of Movement')+ 
+    facet_wrap(~factor(id), ncol = 2)+
+    theme_gray(base_size = 20)+
+    theme(
+      panel.grid.major = element_line(size = 0)
+      , panel.grid.minor = element_line(size = 0)
+      , strip.text = element_text(size=15)
+      , strip.background = element_blank()
+      , axis.text.x = element_text(size = 12)
+      , legend.position = "none"
+      , panel.background = element_rect(fill = "white", color = "black")
+    ) ->p1
+  return(p1)
+}
 
-subj_to_plot %>%
-  dplyr::filter(id == p2_id, time >=lo2, time <=hi2) -> subj_to_plot_id2
+# plot
+by_subj(1, 10)
+by_subj(11, 20)
+by_subj(21, 29)
 
-p2cols %>%
-  dplyr::filter(group ==p2_id, x == 1) -> p2_id_col2
-p2_id_col = p2_id_col2$colour
-
-# get id for df_id_meansy
-# NOTE: stan id and df id will not necessarily match (some participant numbers removed)
-df_id2 = id_list[p2_id]
-
-subj_to_plot_id2 %>%
-  ggplot()+
-  geom_line(aes(x=time, y=med_2), color = p2_id_col, size = 2)+
-  geom_line(aes(x=time, y=hi95_2), color = p2_id_col, linetype = "dashed", size = 2)+
-  geom_line(aes(x=time, y=lo95_2), color = p2_id_col, linetype = "dashed", size = 2)+
-  geom_line(data = subset(df_id_meansy, condition == "no_vision" & id == df_id2 & time_lores >=lo2 & time_lores <=hi2), aes(x=time_lores, y=position_bin_scale_avg, group = id), size = 2, color = "gray50")+
-  ylab('')+
-  xlab('')+
-  theme_gray(base_size = 20)+
-  theme(
-    panel.grid.major = element_line(size = 0)
-    , panel.grid.minor = element_line(size = 0)
-    , axis.ticks = element_line(size = 0)
-    , axis.text = element_blank()
-    , legend.position = "none"
-    , panel.border = element_rect(size = 2, fill = NA)
-    , panel.background = element_rect(fill = "white", color = "black")
-  )
 
 
 
@@ -3824,9 +3882,9 @@ noise_subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
   # geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = factor(id), alpha=0.2)+
-  geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_biny, condition == "vision"), aes(x=time_lores, y=SD, group = id), size = 0.5, color = "gray50")+
+  # geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
+  # geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
+  # geom_line(data = subset(noise_df_long_biny, condition == "vision"), aes(x=time_lores, y=SD, group = id), size = 0.5, color = "gray50")+
   ylab('Log Standard Deviation')+
   xlab('Proportion of Movement')+
   ggtitle('Vision')+
@@ -3842,9 +3900,9 @@ noise_subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
   # geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = factor(id), alpha=0.2)+
-  geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_biny, condition == "no_vision"), aes(x=time_lores, y=SD, group = id), size = 0.5, color = "gray50")+
+  # geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
+  # geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
+  # geom_line(data = subset(noise_df_long_biny, condition == "no_vision"), aes(x=time_lores, y=SD, group = id), size = 0.5, color = "gray50")+
   ylab('Log Standard Deviation')+
   xlab('Proportion of Movement')+
   ggtitle('No Vision')+
@@ -3856,6 +3914,42 @@ noise_subj_to_plot %>%
     , panel.background = element_rect(fill = "white", color = "black")
   )
 
+# need to order participant IDs from 1 to 29 for df_id_meansy
+noise_df_long_biny$orig_id = noise_df_long_biny$id
+noise_df_long_biny$id = factor(as.numeric(droplevels(noise_df_long_biny$id)))
+
+noise_by_subj = function(id_lo, id_hi) {
+  noise_subj_to_plot %>%
+    dplyr::filter(id <= id_hi, id >= id_lo) %>%
+    ggplot()+
+    geom_line(aes(x=time, y=med_1, group = factor(id)), color = "turquoise")+
+    geom_line(aes(x=time, y=hi95_1, group = factor(id)), linetype = "dashed", color = "turquoise")+
+    geom_line(aes(x=time, y=lo95_1, group = factor(id)), linetype = "dashed", color = "turquoise")+
+    geom_line(data = subset(noise_df_long_biny, condition == "vision" & as.numeric(id) <= id_hi & as.numeric(id) >= id_lo), aes(x=time_lores, y=SD, group = id ),size = 0.5, color = "gray50")+
+    geom_line(aes(x=time, y=med_2, group = factor(id)), color = "red")+
+    geom_line(aes(x=time, y=hi95_2, group = factor(id)), linetype = "dashed", color = "red")+
+    geom_line(aes(x=time, y=lo95_2, group = factor(id)), linetype = "dashed", color = "red")+
+    geom_line(data = subset(noise_df_long_biny, condition == "no_vision" & as.numeric(id) <= id_hi & as.numeric(id) >= id_lo), aes(x=time_lores, y=SD, group = id ),size = 0.5, color = "gray50")+
+    ylab('Log Standard Deviation')+
+    xlab('Proportion of Movement')+ 
+    facet_wrap(~factor(id), ncol = 2)+
+    theme_gray(base_size = 20)+
+    theme(
+      panel.grid.major = element_line(size = 0)
+      , panel.grid.minor = element_line(size = 0)
+      , strip.text = element_text(size=15)
+      , strip.background = element_blank()
+      , axis.text.x = element_text(size = 12)
+      , legend.position = "none"
+      , panel.background = element_rect(fill = "white", color = "black")
+    ) ->p1
+  return(p1)
+}
+
+# plot
+noise_by_subj(1, 10)
+noise_by_subj(11, 20)
+noise_by_subj(21, 29)
 
 
 

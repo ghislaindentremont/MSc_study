@@ -1185,15 +1185,51 @@ df_subj= readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Tra
 df_subj %>%
   spread(condition, value) -> df_subj
 
+by_subj = function(id_lo, id_hi) {
+  subj_to_plot %>%
+    dplyr::filter(as.numeric(id) <= id_hi, as.numeric(id) >= id_lo) %>%
+    ggplot()+
+    geom_line(aes(x=time, y=med_1, group = factor(id)), color = "turquoise")+
+    geom_line(aes(x=time, y=hi95_1, group = factor(id)), linetype = "dashed", color = "turquoise")+
+    geom_line(aes(x=time, y=lo95_1, group = factor(id)), linetype = "dashed", color = "turquoise")+
+    geom_line(data = subset(df_long_sim_avg, condition == "condition1" & as.numeric(id) <= id_hi & as.numeric(id) >= id_lo), aes(x=time, y=position_avg, group = id), size = 0.5, color = "gray50")+
+    geom_line(data=subset(df_subj, id <= id_hi & id >= id_lo), aes(x = time, y = condition1, group = id), linetype = "longdash")+
+    geom_line(aes(x=time, y=med_2, group = factor(id)), color = "red")+
+    geom_line(aes(x=time, y=hi95_2, group = factor(id)), linetype = "dashed", color = "red")+
+    geom_line(aes(x=time, y=lo95_2, group = factor(id)), linetype = "dashed", color = "red")+
+    geom_line(data = subset(df_long_sim_avg, condition == "condition2" & as.numeric(id) <= id_hi & as.numeric(id) >= id_lo), aes(x=time, y=position_avg, group = id), size = 0.5, color = "gray50")+
+    geom_line(data=subset(df_subj, id <= id_hi & id >= id_lo), aes(x = time, y = condition2, group = id), linetype = "longdash")+
+    ylab('Scaled Position')+
+    xlab('Proportion of Movement')+ 
+    facet_wrap(~id, ncol = 2)+
+    theme_gray(base_size = 20)+
+    theme(
+      panel.grid.major = element_line(size = 0)
+      , panel.grid.minor = element_line(size = 0)
+      , strip.text = element_text(size=15)
+      , strip.background = element_blank()
+      , axis.text.x = element_text(size = 12)
+      , legend.position = "none"
+      , panel.background = element_rect(fill = "white", color = "black")
+    ) ->p1
+  return(p1)
+}
+
+# plot
+by_subj(1, 10)
+by_subj(11, 20)
+by_subj(21, 29)
+
+# condition 1
 subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
-  geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_long_sim_avg, condition == "condition1"), aes(x=time, y=position_avg, group = id), size = 0.5, color = "gray50")+
-  geom_line(data=df_subj, aes(x = time, y = condition1, group = id), linetype = "longdash")+
+  # geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
+  # geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
+  # geom_line(data = subset(df_long_sim_avg, condition == "condition1"), aes(x=time, y=position_avg, group = id), size = 0.5, color = "gray50")+
+  # geom_line(data=df_subj, aes(x = time, y = condition1, group = id), linetype = "longdash")+
   ylab('Scaled Position')+
-  xlab('Proportion of Movement')+ 
+  xlab('Proportion of Movement')+
   ggtitle('Condition 1')+
   theme_gray(base_size = 20)+
   theme(
@@ -1201,20 +1237,19 @@ subj_to_plot %>%
     , panel.grid.minor = element_line(size = 0)
     , legend.position = "none"
     , panel.background = element_rect(fill = "white", color = "black")
-  ) ->p1
+  ) -> p1
 print(p1)
 
-
-# condition 2
+# condition 2 
 subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
-  geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(df_long_sim_avg, condition == "condition2"), aes(x=time, y=position_avg, group = id), size = 0.5, color = "gray50")+
-  geom_line(data=df_subj, aes(x = time, y = condition2, group = id), linetype = "longdash")+
+  # geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
+  # geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
+  # geom_line(data = subset(df_long_sim_avg, condition == "condition2"), aes(x=time, y=position_avg, group = id), size = 0.5, color = "gray50")+
+  # geom_line(data=df_subj, aes(x = time, y = condition2, group = id), linetype = "longdash")+
   ylab('Scaled Position')+
-  xlab('Proportion of Movement')+ 
+  xlab('Proportion of Movement')+
   ggtitle('Condition 2')+
   theme_gray(base_size = 20)+
   theme(
@@ -1308,13 +1343,48 @@ df_subj_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Traject
 df_subj_noise %>%
   spread(condition, value) -> df_subj_noise
 
+noise_by_subj = function(id_lo, id_hi) {
+  noise_subj_to_plot %>%
+    dplyr::filter(as.numeric(id) <= id_hi, as.numeric(id) >= id_lo) %>%
+    ggplot()+
+    geom_line(aes(x=time, y=med_1, group = factor(id)), color = "turquoise")+
+    geom_line(aes(x=time, y=hi95_1, group = factor(id)), linetype = "dashed", color = "turquoise")+
+    geom_line(aes(x=time, y=lo95_1, group = factor(id)), linetype = "dashed", color = "turquoise")+
+    geom_line(data = subset(noise_df_long_sim, condition == "condition1" & as.numeric(id) <= id_hi & as.numeric(id) >= id_lo), aes(x=time, y=SD, group = id), size = 0.5, color = "gray50")+
+    geom_line(data=subset(df_subj_noise, id <= id_hi & id >= id_lo), aes(x = time, y = condition1, group = id), linetype = "longdash")+
+    geom_line(aes(x=time, y=med_2, group = factor(id)), color = "red")+
+    geom_line(aes(x=time, y=hi95_2, group = factor(id)), linetype = "dashed", color = "red")+
+    geom_line(aes(x=time, y=lo95_2, group = factor(id)), linetype = "dashed", color = "red")+
+    geom_line(data = subset(noise_df_long_sim, condition == "condition2" & as.numeric(id) <= id_hi & as.numeric(id) >= id_lo), aes(x=time, y=SD, group = id), size = 0.5, color = "gray50")+
+    geom_line(data=subset(df_subj_noise, id <= id_hi & id >= id_lo), aes(x = time, y = condition2, group = id), linetype = "longdash")+
+    ylab('Log Standard Deviation')+
+    xlab('Proportion of Movement')+
+    facet_wrap(~id, ncol = 2)+
+    theme_gray(base_size = 20)+
+    theme(
+      panel.grid.major = element_line(size = 0)
+      , panel.grid.minor = element_line(size = 0)
+      , strip.text = element_text(size=15)
+      , strip.background = element_blank()
+      , axis.text.x = element_text(size = 12)
+      , legend.position = "none"
+      , panel.background = element_rect(fill = "white", color = "black")
+    ) ->p1
+  return(p1)
+}
+
+# plot
+noise_by_subj(1, 10)
+noise_by_subj(11, 20)
+noise_by_subj(21, 29)
+
 noise_subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_1, color = factor(id)))+
-  geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_sim, condition == "condition1"), aes(x=time, y=SD, group = id), size = 0.5, color = "gray50")+
-  geom_line(data=df_subj_noise, aes(x = time, y = condition1, group = id), linetype = "longdash")+
+  # geom_line(aes(x=time, y=hi95_1, color = factor(id)), linetype = "dashed")+
+  # geom_line(aes(x=time, y=lo95_1, color = factor(id)), linetype = "dashed")+
+  # geom_line(data = subset(noise_df_long_sim, condition == "condition1"), aes(x=time, y=SD, group = id), size = 0.5, color = "gray50")+
+  # geom_line(data=df_subj_noise, aes(x = time, y = condition1, group = id), linetype = "longdash")+
   ylab('Log Standard Deviation')+
   xlab('Proportion of Movement')+
   ggtitle('Condition 1')+
@@ -1329,10 +1399,10 @@ noise_subj_to_plot %>%
 noise_subj_to_plot %>%
   ggplot()+
   geom_line(aes(x=time, y=med_2, color = factor(id)))+
-  geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
-  geom_line(data = subset(noise_df_long_sim, condition == "condition2"), aes(x=time, y=SD, group = id), size = 0.5, color = "gray50")+
-  geom_line(data=df_subj_noise, aes(x = time, y = condition2, group = id), linetype = "longdash")+
+  # geom_line(aes(x=time, y=hi95_2, color = factor(id)), linetype = "dashed")+
+  # geom_line(aes(x=time, y=lo95_2, color = factor(id)), linetype = "dashed")+
+  # geom_line(data = subset(noise_df_long_sim, condition == "condition2"), aes(x=time, y=SD, group = id), size = 0.5, color = "gray50")+
+  # geom_line(data=df_subj_noise, aes(x = time, y = condition2, group = id), linetype = "longdash")+
   ylab('Log Standard Deviation')+
   xlab('Proportion of Movement')+
   ggtitle('Condition 2')+
