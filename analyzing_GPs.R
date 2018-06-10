@@ -46,6 +46,7 @@ plot_sim = function(ids_use, coor) {
 # plot participant data, for each trial
 plot_sim(1:10)
 plot_sim(11:20)
+plot_sim(21:29)
 
 
 # average over trials
@@ -215,6 +216,9 @@ df_yspat_var_anova$condition = factor(df_yspat_var_anova$condition, c("Condition
 # get population noise
 df_pop_noise = readRDS("/Users/ghislaindentremont/Documents/Experiments/Trajectory/Trajectory Studies/previous_analyses/fake_thesis_15/fake_data_proposal_pop_noise.rds")
 
+# we cannot oversample because in this case we do not have that many samples 
+num_samples = 15
+
 ezANOVA(
   df_yspat_var_anova
   , dv = spat_var
@@ -245,41 +249,43 @@ spatplot+
 ####               Spline Method                    ####
 ########################################################
 
+run_custom_spline = T
+
 round0 = function(x,z){
   round(x/z,0)*z
 }
 
-# we cannot oversample because in this case we do not have that many samples 
-num_samples = 15
-
 bin_width = 1/(num_samples-1)
 
-# # NOTE: df_spline should be nearly identical to df_long_sim
-# # NOTE: in the case of time normalization with so few samples there is no point in this
-# df_spline = ddply(
-#   .data = df_long_sim
-#   , .variables = .(id, condition, trial, coordinate)
-#   , .fun = function(x){
-#     
-#     temp = smooth.spline(x$time, x$position)  # 4th order (i.e. cubic)
-#     
-#     the_bin_width = max(temp$x)/(num_samples-1)
-#     
-#     # between 0 and 1
-#     time_over = seq(0, max(temp$x), length.out = num_samples)
-#     
-#     time_round = unique(round0(time_over, the_bin_width))
-#     
-#     # actually get values
-#     pred = predict(temp, time_round)
-#     
-#     return(data.frame(time = pred$x, value = pred$y, norm_idx = 1:length(pred$x)))
-#   }
-# )
+if (run_custom_spline) {
+  # NOTE: df_spline should be nearly identical to df_long_sim
+  # NOTE: in the case of time normalization with so few samples there is no point in this
+  df_spline = ddply(
+    .data = df_long_sim
+    , .variables = .(id, condition, trial, coordinate)
+    , .fun = function(x){
+      
+      temp = smooth.spline(x$time, x$position, spar = 0.4)  # 4th order (i.e. cubic)
+      
+      the_bin_width = max(temp$x)/(num_samples-1)
+      
+      # between 0 and 1
+      time_over = seq(0, max(temp$x), length.out = num_samples)
+      
+      time_round = unique(round0(time_over, the_bin_width))
+      
+      # actually get values
+      pred = predict(temp, time_round)
+      
+      return(data.frame(time = pred$x, value = pred$y, norm_idx = 1:length(pred$x)))
+    }
+  )
+} else{
+  df_spline = df_long_sim
+  df_spline$norm_idx = 1:num_samples
+  names(df_spline)[5] = c("value")
+}
 
-df_spline = df_long_sim
-df_spline$norm_idx = 1:num_samples
-names(df_spline)[5] = c("value")
 
 # average over trials
 df_spline %>%
@@ -956,7 +962,7 @@ subj_volatility_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> subj_volatility_sds_c
 
-gg_volatility_sds = get_violin(subj_volatility_sds_c, "Participant Volatility Variability (SD)")
+gg_volatility_sds = get_violin(subj_volatility_sds_c, "Volatility Variability (SD)")
 
 gg_volatility_sds+
   geom_segment(aes(x = 0.5, y = 0.71, xend = 1.5, yend = 0.71), linetype = 'dotted', size = 0.5)+
@@ -966,7 +972,7 @@ subj_volatility_sds %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> subj_volatility_sds_e
 
-gg_volatility_sds_effect = get_violin(subj_volatility_sds_e, "Participant Volatility Variability (SD)", hline = T, iseffect = T)
+gg_volatility_sds_effect = get_violin(subj_volatility_sds_e, "Volatility Variability (SD)", hline = T, iseffect = T)
 
 gg_volatility_sds_effect+
   geom_segment(aes(x = 0.5, y = 0.71 - 1.14, xend = 1.5, yend = 0.71 - 1.14), linetype = 'dotted', size = 0.5)
@@ -982,7 +988,7 @@ subj_amplitude_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> subj_amplitude_sds_c
 
-gg_amplitude_sds = get_violin(subj_amplitude_sds_c, "Participant Amplitude Variability (SD)")
+gg_amplitude_sds = get_violin(subj_amplitude_sds_c, "Amplitude Variability (SD)")
 
 gg_amplitude_sds+
   geom_segment(aes(x = 0.5, y = 0.53, xend = 1.5, yend = 0.53), linetype = 'dotted', size = 0.5)+
@@ -992,7 +998,7 @@ subj_amplitude_sds %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> subj_amplitude_sds_e
 
-gg_amplitude_sds_effect = get_violin(subj_amplitude_sds_e, "Participant Amplitude Variability (SD)", hline = T, iseffect = T)
+gg_amplitude_sds_effect = get_violin(subj_amplitude_sds_e, "Amplitude Variability (SD)", hline = T, iseffect = T)
 
 gg_amplitude_sds_effect+
   geom_segment(aes(x = 0.5, y = 0.53 - 0.43, xend = 1.5, yend = 0.53 - 0.43), linetype = 'dotted', size = 0.5)
@@ -1068,7 +1074,7 @@ noise_subj_volatility_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> noise_subj_volatility_sds_c
 
-gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds_c, "Noise Participant Volatility Variability (SD)")
+gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds_c, "Noise Volatility Variability (SD)")
 
 gg_noise_volatility_sds+
   geom_segment(aes(x = 0.5, y = 1.2, xend = 1.5, yend = 1.2), linetype = 'dotted', size = 0.5)+
@@ -1078,7 +1084,7 @@ noise_subj_volatility_sds %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> noise_subj_volatility_sds_e
 
-gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "Noise Participant Volatility Variability (SD)", iseffect = T, hline = T)
+gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "Noise Volatility Variability (SD)", iseffect = T, hline = T)
 
 gg_noise_volatility_sds_effect+
   geom_segment(aes(x = 0.5, y = 1.2-0.8, xend = 1.5, yend = 1.2-0.8), linetype = 'dotted', size = 0.5)
@@ -1094,7 +1100,7 @@ noise_subj_amplitude_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, condition1:condition2) -> noise_subj_amplitude_sds_c
 
-gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds_c, "Noise Participant Amplitude Variability (SD)")
+gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds_c, "Noise Amplitude Variability (SD)")
 
 gg_noise_amplitude_sds+
   geom_segment(aes(x = 0.5, y = 0.43, xend = 1.5, yend = 0.43), linetype = 'dotted', size = 0.5)+
@@ -1104,7 +1110,7 @@ noise_subj_amplitude_sds %>%
   dplyr::select(-c(condition1, condition2)) %>%
   gather(condition, value, effect) -> noise_subj_amplitude_sds_e
 
-gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "Noise Participant Amplitude Variability (SD)", iseffect = T, hline = T)
+gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "Noise Amplitude Variability (SD)", iseffect = T, hline = T)
 
 gg_noise_amplitude_sds_effect+
   geom_segment(aes(x = 0.5, y = 0.43-0.53, xend = 1.5, yend = 0.43-0.53), linetype = 'dotted', size = 0.5)

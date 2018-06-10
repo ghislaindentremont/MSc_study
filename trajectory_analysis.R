@@ -1953,7 +1953,7 @@ do_anovas = function(dv, YL, XL, SL) {
     , dv = temp
     , wid = id
     , within = condition
-    , between = blocking
+    # , between = blocking
     # , return_aov = T
   )
   print(ez_print)
@@ -1962,13 +1962,13 @@ do_anovas = function(dv, YL, XL, SL) {
     , dv = temp
     , wid = id
     , within = condition
-    , between = blocking
+    # , between = blocking
     , x = condition
-    , split = blocking
+    # , split = blocking
     , do_bar = T
     , y_lab = YL
     , x_lab = XL
-    , split_lab = SL
+    # , split_lab = SL
   )
 }
 
@@ -2022,20 +2022,20 @@ ezANOVA(
   , dv = time_after_peak_velocity
   , wid = id
   , within = condition
-  , between = blocking
+  # , between = blocking
 )
 ezPlot(
   df_ykinematics
   , dv = time_after_peak_velocity
   , wid = id
   , within = condition
-  , between = blocking
+  # , between = blocking
   , x = condition
-  , split = blocking
+  # , split = blocking
   , do_bar = T
   , y_lab = "TAPV (ms)"
   , x_lab = "Vision Condition"
-  , split_lab = "Blocking"
+  # , split_lab = "Blocking"
 )
 
 
@@ -2409,20 +2409,20 @@ ezANOVA(
   , dv = count
   , wid = id
   , within = .(condition)
-  , between = .(blocking)
+  # , between = .(blocking)
 )
 ezPlot(
   df_disccontinuity_anova
   , dv = count
   , wid = id
   , within = .c(condition)
-  , between = .c(blocking)
-  , split = blocking
+  # , between = .c(blocking)
+  # , split = blocking
   , x = condition
   , do_bar = T
   , y_lab = "Discontinuities (count)"
   , x_lab = "Vision Condition"
-  , split_lab = "Blocking"
+  # , split_lab = "Blocking"
 )
 
 
@@ -3451,13 +3451,13 @@ subj_amplitude_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> subj_amplitude_sds_c
 
-gg_amplitude_sds = get_violin(subj_amplitude_sds_c, "Participant Amplitude Variability (SD)")
+gg_amplitude_sds = get_violin(subj_amplitude_sds_c, "Amplitude Variability (SD)")
 
 subj_amplitude_sds %>%
   dplyr::select(-c(vision, no_vision)) %>%
   gather(condition, value, effect) -> subj_amplitude_sds_e
 
-gg_amplitude_sds_effect = get_violin(subj_amplitude_sds_e, "Participant Amplitude Variability (SD)", iseffect = T, hline = T)
+gg_amplitude_sds_effect = get_violin(subj_amplitude_sds_e, "Amplitude Variability (SD)", iseffect = T, hline = T)
 
 
 # participant mean volatilty sd
@@ -3470,13 +3470,13 @@ subj_volatility_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> subj_volatility_sds_c
 
-gg_volatility_sds = get_violin(subj_volatility_sds_c, "Participant Volatility Variability (SD)")
+gg_volatility_sds = get_violin(subj_volatility_sds_c, "Volatility Variability (SD)")
 
 subj_volatility_sds %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> subj_volatility_sds_e
 
-gg_volatility_sds_effect = get_violin(subj_volatility_sds_e, "Participant Volatility Variability (SD)", iseffect = T, hline = T)
+gg_volatility_sds_effect = get_violin(subj_volatility_sds_e, "Volatility Variability (SD)", iseffect = T, hline = T)
 
 
 
@@ -3530,13 +3530,13 @@ noise_subj_volatility_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> noise_subj_volatility_sds_c
 
-gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds_c, "Noise Participant Volatility Variability (SD)")
+gg_noise_volatility_sds = get_violin(noise_subj_volatility_sds_c, "Noise Volatility Variability (SD)")
 
 noise_subj_volatility_sds %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> noise_subj_volatility_sds_e
 
-gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "Noise Participant Volatility Variability (SD)", iseffect = T, hline = T)
+gg_noise_volatility_sds_effect = get_violin(noise_subj_volatility_sds_e, "Noise Volatility Variability (SD)", iseffect = T, hline = T)
 
 
 
@@ -3550,13 +3550,13 @@ noise_subj_amplitude_sds %>%
   dplyr::select(-c(effect)) %>%
   gather(condition, value, vision:no_vision) -> noise_subj_amplitude_sds_c
 
-gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds_c, "Noise Participant Amplitude Variability (SD)")
+gg_noise_amplitude_sds = get_violin(noise_subj_amplitude_sds_c, "Noise Amplitude Variability (SD)")
 
 noise_subj_amplitude_sds %>%
   dplyr::select(-c(vision:no_vision)) %>%
   gather(condition, value, effect) -> noise_subj_amplitude_sds_e
 
-gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "Noise Participant Amplitude Variability (SD)", iseffect = T, hline = T)
+gg_noise_amplitude_sds_effect = get_violin(noise_subj_amplitude_sds_e, "Noise Amplitude Variability (SD)", iseffect = T, hline = T)
 
 
 
