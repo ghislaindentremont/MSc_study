@@ -4068,20 +4068,20 @@ to_plot %>%
 # and against one another
 to_plot %>%
   ggplot()+
-  geom_line(aes(x=time, y=med_1), color = "turquoise")+
-  geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
-  geom_line(aes(x=time, y=med_2), color = "red")+
-  geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  annotate("text", label = "Vision", x = 3/15, y = -0.15, color = "turquoise")+
-  annotate("text", label = "No Vision", x = 8/15, y = -1, color = "red")+
+  geom_line(aes(x=time, y=med_1), color = "red")+
+  geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "red", alpha=0.5)+
+  geom_line(aes(x=time, y=med_2), color = "turquoise")+
+  geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "turquoise", alpha=0.5)+
+  annotate("text", label = "Vision", x = 3/15, y = -0.15, color = "red")+
+  annotate("text", label = "No Vision", x = 8/15, y = -1, color = "turquoise")+
   geom_line(data=subset(df_condition_meansy, condition == "vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
   geom_line(data=subset(df_condition_meansy, condition == "no_vision"), aes(x=time_lores, y=position_bin_scale_grand_avg), size = 0.5, color = "grey50")+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1, color = "red")+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1, color = "red")+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1, color = "red")+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1, color = "turquoise")+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(to_plot$med_1)), size = 1, color = "red")+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(to_plot$med_1)), size = 1, color = "red")+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(to_plot$med_1)), size = 1, color = "red")+
   ylab('Scaled Position')+
   xlab('Proportion of Movement')+ 
   theme_gray(base_size = 20)+
@@ -4253,22 +4253,22 @@ noise_to_plot %>%
 # one against the other
 noise_to_plot %>%
   ggplot()+
-  geom_line(aes(x=time, y=med_1), color = "turquoise")+
-  geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1),fill = "turquoise", alpha=0.5)+
-  geom_line(aes(x=time, y=med_2), color = "red")+
-  geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
+  geom_line(aes(x=time, y=med_1), color = "red")+
+  geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1),fill = "red", alpha=0.5)+
+  geom_line(aes(x=time, y=med_2), color = "turquoise")+
+  geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "turquoise", alpha=0.5)+
   geom_line(data=subset(subj_noise, condition == "vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
   geom_line(data=subset(subj_noise, condition == "no_vision"), aes(x=time_lores, y=avg_SD), size = 0.5, color = "gray50")+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_velocity, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_acceleration, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
-  geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_deceleration, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
-  geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_velocity, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_acceleration, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
+  # geom_point(data = subset(kms_to_plot, condition == "vision"), aes(x=time_peak_deceleration, y=min(noise_to_plot$med_1)), size = 1, color = "red")+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_velocity, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_acceleration, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
+  # geom_point(data = subset(kms_to_plot, condition == "no_vision"), aes(x=time_peak_deceleration, y=min(noise_to_plot$med_1)), size = 1, color = "turquoise")+
   ylab('Log Standard Deviation')+
   xlab('Proportion of Time')+
-  annotate("text", label = "Vision", x = 2/15, y = -1.0, color = "turquoise")+
-  annotate("text", label = "No Vision", x = 4/15, y = -2.5, color = "red")+
+  annotate("text", label = "Vision", x = 2/15, y = -1.0, color = "red")+
+  annotate("text", label = "No Vision", x = 4/15, y = -2.5, color = "turquoise")+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)

@@ -1518,12 +1518,12 @@ to_plot %>%
 # and against one another
 to_plot %>%
   ggplot()+
-  geom_line(aes(x=time, y=med_1), color = "turquoise")+
-  geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "turquoise", alpha=0.5)+
-  geom_line(aes(x=time, y=med_2), color = "red")+
-  geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
-  annotate("text", label = "Condition 1", x = 3/15, y = -0, color = "turquoise")+
-  annotate("text", label = "Condition 2", x = 8/15, y = -2, color = "red")+
+  geom_line(aes(x=time, y=med_1), color = "red")+
+  geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1), fill = "red", alpha=0.5)+
+  geom_line(aes(x=time, y=med_2), color = "turquoise")+
+  geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "turquoise", alpha=0.5)+
+  annotate("text", label = "Condition 1", x = 3/15, y = -0, color = "red")+
+  annotate("text", label = "Condition 2", x = 8/15, y = -2, color = "turquoise")+
   geom_line(data = subset(df_long_sim_grand_avg, condition == "condition1"), aes(x=time, y=position_grand_avg), size = 0.5, color = "gray50")+
   geom_line(data=df_pop, aes(x = time, y = condition1), linetype = "longdash")+   
   geom_line(data = subset(df_long_sim_grand_avg, condition == "condition2"), aes(x=time, y=position_grand_avg), size = 0.5, color = "gray50")+
@@ -1677,18 +1677,18 @@ noise_to_plot %>%
 # one against the other
 noise_to_plot %>%
   ggplot()+
-  geom_line(aes(x=time, y=med_1), color = "turquoise")+
-  geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1),fill = "turquoise", alpha=0.5)+
-  geom_line(aes(x=time, y=med_2), color = "red")+
-  geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "red", alpha=0.5)+
+  geom_line(aes(x=time, y=med_1), color = "red")+
+  geom_ribbon(aes(x=time, ymin=lo95_1, ymax=hi95_1),fill = "red", alpha=0.5)+
+  geom_line(aes(x=time, y=med_2), color = "turquoise")+
+  geom_ribbon(aes(x=time, ymin=lo95_2, ymax=hi95_2), fill = "turquoise", alpha=0.5)+
   geom_line(data = subset(subj_noise, condition == "condition1"), aes(x=time, y=avg_SD), size = 0.5, color = "gray50")+
   geom_line(data=df_pop_noise, aes(x = time, y = condition1), linetype = "longdash")+    
   geom_line(data = subset(subj_noise, condition == "condition2"), aes(x=time, y=avg_SD), size = 0.5, color = "gray50")+
   geom_line(data=df_pop_noise, aes(x = time, y = condition2), linetype = "longdash")+  
   ylab('Log Standard Deviation')+
   xlab('Proportion of Time')+
-  annotate("text", label = "Condition 1", x = 12/15, y = -0.4, color = "turquoise")+
-  annotate("text", label = "Condition 2", x = 4/15, y = 0.6, color = "red")+
+  annotate("text", label = "Condition 1", x = 12/15, y = -0.4, color = "red")+
+  annotate("text", label = "Condition 2", x = 4/15, y = 0.6, color = "turquoise")+
   theme_gray(base_size = 20)+
   theme(
     panel.grid.major = element_line(size = 0)
