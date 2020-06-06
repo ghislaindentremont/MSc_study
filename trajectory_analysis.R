@@ -2737,7 +2737,7 @@ display_fanovan = function(filename, norm_y = T) {
   
   # change names and order of levels
   fanovan$condition = revalue(fanovan$condition, c("no_vision"="NV", "vision" = "V"))
-  fanovan$condition = factor(fanovan$condition, c("V", "NV"))
+  fanovan$condition = factor(fanovan$condition, c("NV", "V"))
   
   if (norm_y){
     # overhead view 

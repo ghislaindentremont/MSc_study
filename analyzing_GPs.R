@@ -316,7 +316,19 @@ df_spline_grand_avg %>%
   labs(x = "Proportion of Movement", y = "Y Position", color = "Condition")+
   geom_line(data=df_pop, aes(x = time, y = condition1), linetype = "longdash")+
   geom_line(data=df_pop, aes(x = time, y = condition2), linetype = "longdash")
-  
+
+
+# change names and order of levels
+df_long_sim_grand_avg$condition = revalue(df_long_sim_grand_avg$condition, c("condition1"="Condition1", "condition2" = "Condition2"))
+df_long_sim_grand_avg$condition = factor(df_long_sim_grand_avg$condition, c("Condition2", "Condition1"))
+
+# look at raw data
+df_long_sim_grand_avg %>%
+  ggplot()+
+    geom_line(aes(x=time, y=position_grand_avg, group=condition, color=condition))+
+    labs(x = "Proportion of Movement", y = "Y Position", color = "Condition")+
+    geom_line(data=df_pop, aes(x = time, y = condition1), linetype = "longdash")+
+    geom_line(data=df_pop, aes(x = time, y = condition2), linetype = "longdash")
 
 # take difference 
 df_spline_avg %>%
@@ -435,7 +447,7 @@ display_fanovan = function(filename, frames) {
 
   # change names and order of levels
   fanovan$condition = revalue(fanovan$condition, c("no_vision"="Condition1", "vision" = "Condition2"))
-  fanovan$condition = factor(fanovan$condition, c("Condition1", "Condition2"))
+  fanovan$condition = factor(fanovan$condition, c("Condition2", "Condition1"))
 
   for_plot1 = subset(fanovan, condition == "Condition1")
   for_plot2 = subset(fanovan, condition == "Condition2")
